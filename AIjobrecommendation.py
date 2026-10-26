@@ -1,3 +1,4 @@
+import sys
 import json
 import numpy as np
 import pandas as pd
@@ -6,6 +7,10 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.preprocessing import LabelEncoder
 from config import MONGO_URI
+
+# Ensure UTF-8 output encoding on Windows PowerShell / Command Prompt
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Connect to MongoDB
 client = pymongo.MongoClient(MONGO_URI)
@@ -44,7 +49,8 @@ model.fit(X_train, y_train)
 
 # Function to recommend jobs and store notifications
 def recommend_jobs(user):
-    user_skills = " ".join(user.get("skills", []))
+    skills = user.get("skills", "")
+    user_skills = " ".join(skills) if isinstance(skills, list) else str(skills)
     user_bio = user.get("bio", "").strip()
     user_location = user.get("location", "")
     user_experience = user.get("experience", 0)
