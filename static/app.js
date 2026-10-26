@@ -48,13 +48,37 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Experience Slider Display
+  // Utility: Debounce function for smooth real-time auto-calculation
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  const debouncedRecommend = debounce(() => {
+    triggerRecommend();
+  }, 350);
+
+  // Experience Slider Display & Live Auto-Recommend
   if (expRange && expDisplay) {
     expRange.addEventListener('input', (e) => {
       const val = e.target.value;
       expDisplay.textContent = `${val} Year${val === '1' ? '' : 's'}`;
+      debouncedRecommend();
     });
   }
+
+  // Real-time live calculation as user types skills or bio
+  document.getElementById('candidate-skills')?.addEventListener('input', debouncedRecommend);
+  document.getElementById('candidate-bio')?.addEventListener('input', debouncedRecommend);
+  document.getElementById('candidate-location')?.addEventListener('input', debouncedRecommend);
+  document.getElementById('candidate-name')?.addEventListener('input', debouncedRecommend);
 
   // Quick Preset Handlers
   document.getElementById('preset-ml')?.addEventListener('click', () => {
@@ -87,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     triggerRecommend();
   });
 
-  // Clickable Skill Suggestion Tags
+  // Clickable Skill Suggestion Tags with instant re-calculation
   document.querySelectorAll('.add-skill-tag').forEach(btn => {
     btn.addEventListener('click', () => {
       const skill = btn.getAttribute('data-skill');
@@ -98,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (!current.toLowerCase().includes(skill.toLowerCase())) {
         input.value = `${current}, ${skill}`;
       }
+      triggerRecommend();
     });
   });
 
@@ -183,10 +208,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Handle Form Submission
   form?.addEventListener('submit', (e) => {
     e.preventDefault();
-    triggerRecommend();
+    triggerRecommend(true);
   });
 
-  async function triggerRecommend() {
+  async function triggerRecommend(saveToDb = false) {
     const name = document.getElementById('candidate-name').value.trim();
     const skills = document.getElementById('candidate-skills').value.trim();
     const exp = parseInt(document.getElementById('candidate-experience').value || 0);
@@ -194,14 +219,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const location = document.getElementById('candidate-location').value.trim();
 
     if (!skills && !bio) {
-      alert('Please provide candidate skills or a bio.');
       return;
     }
 
-    // Set UI Loading State
-    btnPredict.disabled = true;
-    btnPredict.innerHTML = '<span class="status-dot"></span> <span>Classifying via Naive Bayes...</span>';
-    resultStatusBadge.textContent = 'Processing Model...';
+    const resultCard = document.getElementById('result-card');
+    resultCard?.classList.add('recalculating');
+    resultStatusBadge.textContent = '⚡ Computing AI Match...';
+    resultStatusBadge.className = 'card-badge pulse-badge';
 
     try {
       const startTime = performance.now();
@@ -209,12 +233,12 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name,
+          name: name || 'Candidate',
           skills: skills,
           experience: exp,
           bio: bio,
           location: location,
-          save_notification: true
+          save_notification: saveToDb
         })
       });
 
@@ -223,13 +247,17 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('result-exec-time').textContent = `${Math.round(endTime - startTime)}ms`;
 
       renderRecommendationResult(data, exp, skills);
-      loadStats(); // Update notification counts
+      resultStatusBadge.textContent = saveToDb ? '✅ Saved to MongoDB' : '✅ Live AI Match';
+      resultStatusBadge.className = 'card-badge pulse-badge';
+      if (saveToDb) {
+        loadStats();
+      }
     } catch (err) {
       console.error('Recommendation failed:', err);
-      alert('Failed to connect to recommendation server.');
     } finally {
-      btnPredict.disabled = false;
-      btnPredict.innerHTML = '<span class="btn-icon">⚡</span> <span>Run AI Recommendation</span>';
+      setTimeout(() => {
+        resultCard?.classList.remove('recalculating');
+      }, 250);
     }
   }
 

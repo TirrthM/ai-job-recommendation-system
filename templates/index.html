@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=3">
 </head>
 <body>
   <!-- Ambient background glow elements -->
@@ -17,54 +17,48 @@
   <div class="glow-orb orb-2"></div>
   <div class="glow-orb orb-3"></div>
 
-  <!-- Header -->
+  <!-- Unified Header & Nav Bar -->
   <header class="app-header">
     <div class="header-container">
       <div class="brand">
         <div class="brand-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
           </svg>
         </div>
         <div>
           <h1 class="brand-title">JobMatch <span class="gradient-text">AI</span></h1>
-          <p class="brand-subtitle">Recommender Systems • Mini Project</p>
+          <p class="brand-subtitle">Recommender Systems</p>
         </div>
       </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-bar">
+        <button class="nav-tab active" data-tab="tab-recommender" id="tab-btn-recommender">
+          <span class="tab-icon">🎯</span> Live Match
+        </button>
+        <button class="nav-tab" data-tab="tab-jobs" id="tab-btn-jobs">
+          <span class="tab-icon">💼</span> Jobs (<span id="count-jobs-badge">99</span>)
+        </button>
+        <button class="nav-tab" data-tab="tab-profiles" id="tab-btn-profiles">
+          <span class="tab-icon">👥</span> Profiles (<span id="count-profiles-badge">99</span>)
+        </button>
+        <button class="nav-tab" data-tab="tab-notifications" id="tab-btn-notifications">
+          <span class="tab-icon">🔔</span> Alerts (<span id="count-notifications-badge">0</span>)
+        </button>
+        <button class="nav-tab" data-tab="tab-analytics" id="tab-btn-analytics">
+          <span class="tab-icon">🧠</span> RS Theory
+        </button>
+      </nav>
 
       <div class="system-status-pills">
         <div class="status-pill active" id="db-status-pill">
           <span class="status-dot"></span>
-          <span>MongoDB: <strong id="header-db-status">Connected (27017)</strong></span>
-        </div>
-        <div class="status-pill">
-          <span class="status-icon">⚡</span>
-          <span>Model: <strong>TF-IDF + Naive Bayes</strong></span>
+          <span>MongoDB: <strong id="header-db-status">Online (27017)</strong></span>
         </div>
       </div>
     </div>
   </header>
-
-  <!-- Navigation Tabs -->
-  <nav class="nav-bar">
-    <div class="nav-container">
-      <button class="nav-tab active" data-tab="tab-recommender" id="tab-btn-recommender">
-        <span class="tab-icon">🎯</span> Live Recommender
-      </button>
-      <button class="nav-tab" data-tab="tab-jobs" id="tab-btn-jobs">
-        <span class="tab-icon">💼</span> Job Catalog (<span id="count-jobs-badge">99</span>)
-      </button>
-      <button class="nav-tab" data-tab="tab-profiles" id="tab-btn-profiles">
-        <span class="tab-icon">👥</span> Profiles (<span id="count-profiles-badge">99</span>)
-      </button>
-      <button class="nav-tab" data-tab="tab-notifications" id="tab-btn-notifications">
-        <span class="tab-icon">🔔</span> Live Notifications (<span id="count-notifications-badge">0</span>)
-      </button>
-      <button class="nav-tab" data-tab="tab-analytics" id="tab-btn-analytics">
-        <span class="tab-icon">🧠</span> RS Architecture & Theory
-      </button>
-    </div>
-  </nav>
 
   <!-- Main Content Container -->
   <main class="main-container">
@@ -404,6 +398,6 @@
     </div>
   </footer>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=3"></script>
 </body>
 </html>
