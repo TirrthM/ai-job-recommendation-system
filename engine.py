@@ -9,6 +9,38 @@ from sklearn.preprocessing import LabelEncoder
 from config import MONGO_URI
 
 
+# ──────────────────────────────────────────────────────────────
+#  SKILL ONTOLOGY & SYNONYM MAPPING (Semantic Skill Bridging)
+# ──────────────────────────────────────────────────────────────
+SKILL_RELATIONS = {
+    # Web & Frontend Development
+    "javascript": ["react", "node.js"],
+    "js": ["react", "node.js"],
+    "typescript": ["react", "node.js"],
+    "ts": ["react", "node.js"],
+    "html": ["react"],
+    "css": ["react"],
+    "frontend": ["react"],
+    "web": ["react", "node.js"],
+    # AI, ML & Deep Learning
+    "deep learning": ["tensorflow", "keras"],
+    "neural networks": ["tensorflow", "keras"],
+    "machine learning": ["ml", "tensorflow"],
+    "ai": ["ml", "tensorflow"],
+    "nlp": ["ml", "python"],
+    # Cloud & DevOps
+    "cloud": ["aws", "azure"],
+    "devops": ["aws", "azure", "node.js"],
+    "docker": ["aws", "azure"],
+    "kubernetes": ["aws", "azure"],
+    "ci/cd": ["aws", "azure"],
+    # Data & Analytics
+    "data analytics": ["data science"],
+    "data analysis": ["data science", "python"],
+    "sql": ["data science", "python"],
+}
+
+
 class RecommendationEngine:
     def __init__(self, mongo_uri=MONGO_URI):
         self.mongo_uri = mongo_uri
@@ -83,11 +115,6 @@ class RecommendationEngine:
     #  COLLABORATIVE FILTERING HELPERS
     # ──────────────────────────────────────────────────────────────
     def _get_collaborative_roles(self, skills_str: str, top_n: int = 3) -> list:
-        """
-        Find the top-N most common job roles held by similar users in the
-        database, based on skill overlap (Jaccard similarity).
-        Returns a list of (role_title, normalized_score) tuples.
-        """
         if not self.users:
             return []
 
@@ -107,15 +134,12 @@ class RecommendationEngine:
             )
             if not user_skills:
                 continue
-            # Jaccard similarity
             intersection = candidate_skills & user_skills
             union        = candidate_skills | user_skills
             if not union:
                 continue
             jaccard = len(intersection) / len(union)
-            if jaccard > 0.1:  # Only consider reasonably similar users
-                # Pull the recommended/tagged role for this user from notifications
-                # (use their historical match) or fall back to their profile title
+            if jaccard > 0.1:
                 role = user.get("recommended_role") or user.get("title") or user.get("desired_role")
                 if role:
                     role_scores[role] += jaccard
@@ -127,11 +151,6 @@ class RecommendationEngine:
         return [(role, score / total) for role, score in role_scores.most_common(top_n)]
 
     def _get_collaborative_roles_from_notifications(self, skills_str: str, top_n: int = 3) -> list:
-        """
-        Collaborative filtering using historical notification data:
-        Find users with similar skills who were previously recommended certain roles.
-        Deduplicates by user to avoid repetitive batch runs skewing the weights.
-        """
         client, db = self.get_db()
         try:
             notifications = list(db['notifications'].find({}, {"_id": 0, "user_name": 1, "job_title": 1}))
@@ -190,12 +209,9 @@ class RecommendationEngine:
     def _rank_jobs(self, user_text: str, candidate_skills: set, candidate_location: str,
                    candidate_exp: int, hybrid_role_scores: dict):
         """
-        Rank all jobs in database using multi-factor scoring:
-        1. TF-IDF cosine similarity between candidate skills/bio and job text
-        2. Direct skill overlap ratio
-        3. Role compatibility from hybrid classifier
-        4. Location match bonus (+0.25) when candidate location matches job location
-        5. Experience qualification
+        Rank all jobs in database using multi-factor scoring.
+        CRITICAL CONSTRAINT: A job MUST have at least 1 matching skill (direct or related)
+        to receive a valid recommendation score. Zero skill matches receive score 0.0.
         """
         user_vec = self.vectorizer.transform([user_text])
         similarities = cosine_similarity(user_vec, self.job_vectors)[0]
@@ -209,22 +225,40 @@ class RecommendationEngine:
             job_skill_tokens = set(
                 s.strip().lower() for s in job_skills_raw.replace(',', ' ').split() if s.strip()
             )
-            common_skills = list(candidate_skills & job_skill_tokens)
-            skill_ratio   = len(common_skills) / max(1, len(job_skill_tokens))
+
+            # 1. Direct skill matches
+            direct_matches = list(candidate_skills & job_skill_tokens)
+
+            # 2. Semantic/ontology-related skill matches
+            related_matches = []
+            for c_skill in candidate_skills:
+                for rel_key, mapped_skills in SKILL_RELATIONS.items():
+                    if rel_key == c_skill or rel_key in c_skill:
+                        for ms in mapped_skills:
+                            if ms in job_skill_tokens and ms not in direct_matches and ms not in related_matches:
+                                related_matches.append(ms)
+
+            all_matched_skills = direct_matches + related_matches
+            matched_count = len(all_matched_skills)
+            skill_ratio   = matched_count / max(1, len(job_skill_tokens))
             is_qualified  = candidate_exp >= job_exp
 
             # Location match bonus
             job_loc_clean = (job.get("location") or "").strip().lower()
             loc_matched   = bool(cand_loc_clean and job_loc_clean == cand_loc_clean)
-            loc_bonus     = 0.25 if loc_matched else 0.0
+            loc_bonus     = 0.20 if loc_matched else 0.0
 
             csim       = float(similarities[i])
             role_score = float(hybrid_role_scores.get(job.get("title"), 0.0))
 
-            # Composite match score: skill overlap + TF-IDF similarity + role prior + location bonus
-            score = (csim * 0.35) + (skill_ratio * 0.25) + (role_score * 0.20) + loc_bonus
-            if not is_qualified:
-                score *= 0.6  # experience penalty
+            # STRICT PREREQUISITE:
+            # If zero skills match, the score is strictly 0.0 and job CANNOT be recommended.
+            if matched_count == 0:
+                score = 0.0
+            else:
+                score = (csim * 0.30) + (skill_ratio * 0.35) + (role_score * 0.15) + loc_bonus
+                if not is_qualified:
+                    score *= 0.6  # experience penalty
 
             ranked.append({
                 "title":               job.get("title"),
@@ -234,7 +268,8 @@ class RecommendationEngine:
                 "required_skills":     job_skills_raw,
                 "experience_required": job_exp,
                 "is_qualified":        is_qualified,
-                "matched_skills":      common_skills,
+                "matched_skills":      all_matched_skills,
+                "direct_matched":      direct_matches,
                 "similarity_score":    round(score, 4),
                 "location_matched":    loc_matched,
             })
@@ -304,28 +339,50 @@ class RecommendationEngine:
             hybrid_role_scores=hybrid_scores
         )
 
-        qualified_jobs = [j for j in all_ranked_jobs if j["is_qualified"]]
-        best_match = qualified_jobs[0] if qualified_jobs else (all_ranked_jobs[0] if all_ranked_jobs else None)
-
-        # Align predicted role with the best-matching job title
-        if best_match:
-            recommended_title = best_match["title"]
-        else:
-            sorted_roles = sorted(hybrid_scores.items(), key=lambda x: x[1], reverse=True)
-            recommended_title = sorted_roles[0][0] if sorted_roles else "Unknown"
-
         # Sort role predictions for breakdown display
         sorted_roles = sorted(hybrid_scores.items(), key=lambda x: x[1], reverse=True)
         top_predictions_list = [
             {"title": role, "confidence": round(score * 100, 1)}
             for role, score in sorted_roles[:5]
         ]
+        probabilities_for_frontend = {
+            row["title"]: row["confidence"] / 100.0
+            for row in top_predictions_list
+        }
+
+        # ── STRICT SKILL CHECK: Only jobs with AT LEAST 1 matching skill can be recommended ──
+        jobs_with_skills = [j for j in all_ranked_jobs if len(j["matched_skills"]) > 0 and j["similarity_score"] > 0]
+
+        if not jobs_with_skills:
+            # ZERO skills matched any position in the database!
+            return {
+                "success":                 True,
+                "predicted_role":          "No Matching Role",
+                "confidence":              0.0,
+                "probabilities":           probabilities_for_frontend,
+                "top_predictions":         top_predictions_list,
+                "matched_job":             None,
+                "all_role_matches":        [],
+                "has_skill_match":         False,
+                "has_experience_conflict": False,
+                "constraint_message":      (
+                    f"No open positions in our database match the entered skills ('{skills_str}'). "
+                    "Current listings require technologies such as Python, React, Node.js, AWS, Azure, Java, Keras, Tensorflow, or Data Science."
+                ),
+                "notification_saved":      False,
+            }
+
+        qualified_jobs = [j for j in jobs_with_skills if j["is_qualified"]]
+        best_match = qualified_jobs[0] if qualified_jobs else jobs_with_skills[0]
+
+        # Predicted role aligns with the best match's title
+        recommended_title = best_match["title"]
 
         # Best confidence (fraction, 0.0–1.0)
-        best_conf_score = best_match["similarity_score"] if best_match else sorted_roles[0][1]
-        best_confidence_frac = min(0.96, max(0.45, best_conf_score))
+        best_conf_score = best_match["similarity_score"]
+        best_confidence_frac = min(0.96, max(0.40, best_conf_score))
 
-        # ── Persist notification with full candidate & job info ──
+        # ── Persist notification with full candidate & job info (ONLY when skills match) ──
         notification_saved = False
         if best_match and save_notification:
             client, db = self.get_db()
@@ -340,7 +397,6 @@ class RecommendationEngine:
                     "required_skills":      best_match.get("required_skills", ""),
                     "similarity_score":     round(best_match.get("similarity_score", 0.0), 3),
                     "status":               "unread",
-                    # Store candidate details for modal display (even if not in DB)
                     "candidate_skills":     skills_str,
                     "candidate_experience": user_exp,
                     "candidate_location":   user_loc,
@@ -353,26 +409,24 @@ class RecommendationEngine:
             finally:
                 client.close()
 
-        # Probabilities dict for the frontend (fraction 0.0–1.0)
-        probabilities_for_frontend = {
-            row["title"]: row["confidence"] / 100.0
-            for row in top_predictions_list
-        }
+        has_exp_conflict = not best_match.get("is_qualified", True)
+        constraint_msg = (
+            f"You match the skills for {best_match['title']}, but your {user_exp} yr experience is below the required {best_match.get('experience_required', 0)} yr."
+            if has_exp_conflict else ""
+        )
 
         return {
-            "success":              True,
-            "predicted_role":       recommended_title,
-            "confidence":           round(best_confidence_frac, 4),
-            "probabilities":        probabilities_for_frontend,
-            "top_predictions":      top_predictions_list,
-            "matched_job":          best_match,
-            "all_role_matches":     all_ranked_jobs[:10],
-            "has_experience_conflict": len(all_ranked_jobs) > 0 and len(qualified_jobs) == 0,
-            "constraint_message":   (
-                f"No jobs found where your {user_exp} yr experience meets the minimum requirement."
-                if (len(all_ranked_jobs) > 0 and len(qualified_jobs) == 0) else ""
-            ),
-            "notification_saved":   notification_saved,
+            "success":                 True,
+            "predicted_role":          recommended_title,
+            "confidence":              round(best_confidence_frac, 4),
+            "probabilities":           probabilities_for_frontend,
+            "top_predictions":         top_predictions_list,
+            "matched_job":             best_match,
+            "all_role_matches":        jobs_with_skills[:10],
+            "has_skill_match":         True,
+            "has_experience_conflict": has_exp_conflict,
+            "constraint_message":      constraint_msg,
+            "notification_saved":      notification_saved,
         }
 
     # ──────────────────────────────────────────────────────────────

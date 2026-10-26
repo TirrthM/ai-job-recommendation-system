@@ -491,3 +491,12 @@ input[type="range"] {
   font-weight: 500;
   color: var(--text-2);
 }
+
+.no-match-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid #ef4444;
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 14px;
+}

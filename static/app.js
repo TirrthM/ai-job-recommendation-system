@@ -278,8 +278,19 @@ function renderResult(res, payload) {
   });
 
   // Best matched job
+  const existingDetail = document.getElementById('inline-candidate-detail');
+  if (existingDetail) existingDetail.remove();
+  const existingNoMatch = document.getElementById('no-match-alert-box');
+  if (existingNoMatch) existingNoMatch.remove();
+
   const job = res.matched_job;
-  if (job && Object.keys(job).length > 0) {
+  const hasValidSkillMatch = job && job.matched_skills && job.matched_skills.length > 0;
+
+  if (hasValidSkillMatch) {
+    $('result-tag').textContent = 'Matched';
+    $('result-tag').className = 'result-tag matched';
+    $('result-tag').removeAttribute('style');
+
     $('jm-title').textContent     = job.title || '—';
     $('jm-company').textContent   = job.company || '—';
     $('jm-location').textContent  = job.location || '—';
@@ -291,22 +302,16 @@ function renderResult(res, payload) {
     const candidateSkillsLower = new Set(
       candidateSkillsRaw.split(/[,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean)
     );
+    const jobMatchedSet = new Set((job.matched_skills || []).map(s => s.toLowerCase()));
 
-    $('jm-req-skills').innerHTML     = tagsHtml(reqSkills, candidateSkillsLower);
-    const matchedSkills              = reqSkills.filter(s => candidateSkillsLower.has(s.toLowerCase()));
-    $('jm-matched-skills').innerHTML = matchedSkills.length
-      ? matchedSkills.map(s => `<span class="sk-tag match">${s}</span>`).join('')
-      : '<span style="color: var(--text-4); font-size:12px">No matching skills</span>';
+    $('jm-req-skills').innerHTML     = tagsHtml(reqSkills, jobMatchedSet);
+    $('jm-matched-skills').innerHTML = job.matched_skills.map(s => `<span class="sk-tag match">${s}</span>`).join('');
 
     const badge         = $('jm-badge');
-    badge.innerHTML     = `<span class="status-pill unread">${matchedSkills.length}/${reqSkills.length} skills</span>`;
+    badge.innerHTML     = `<span class="status-pill unread">${job.matched_skills.length}/${reqSkills.length} skills matched</span>`;
 
     // ── Inline Candidate Details (visible right on the result card) ──
-    const existingDetail = document.getElementById('inline-candidate-detail');
-    if (existingDetail) existingDetail.remove();
-
-    const candidateSkillsList = candidateSkillsRaw
-      .split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+    const candidateSkillsList = candidateSkillsRaw.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
 
     const inlineDetail = document.createElement('div');
     inlineDetail.id    = 'inline-candidate-detail';
@@ -319,7 +324,7 @@ function renderResult(res, payload) {
           <div class="irow"><span class="ikey">Location</span><span class="ival">${payload.location || '—'}</span></div>
           <div class="irow"><span class="ikey">Experience</span><span class="ival">${payload.experience || 0} years</span></div>
           <div class="irow"><span class="ikey">Bio</span><span class="ival" style="font-style:italic">${(payload.bio || '—').slice(0, 100)}</span></div>
-          <div class="irow"><span class="ikey">Skills</span><div class="sk-tags" style="margin-top:2px">${tagsHtml(candidateSkillsList, new Set(reqSkills.map(s=>s.toLowerCase())))}</div></div>
+          <div class="irow"><span class="ikey">Skills</span><div class="sk-tags" style="margin-top:2px">${tagsHtml(candidateSkillsList, jobMatchedSet)}</div></div>
         </div>
         <div class="inline-section">
           <div class="section-label">Match Quality</div>
@@ -327,33 +332,66 @@ function renderResult(res, payload) {
           <div class="irow"><span class="ikey">AI Confidence</span><span class="ival fw" style="color:var(--blue)">${confPct}%</span></div>
           <div class="irow"><span class="ikey">Company</span><span class="ival fw">${job.company || '—'}</span></div>
           <div class="irow"><span class="ikey">Job Location</span><span class="ival">${job.location || '—'}</span></div>
-          <div class="irow"><span class="ikey">Skill Match</span><span class="ival fw" style="color:var(--green)">${matchedSkills.length} / ${reqSkills.length}</span></div>
+          <div class="irow"><span class="ikey">Skill Match</span><span class="ival fw" style="color:var(--green)">${job.matched_skills.length} / ${reqSkills.length}</span></div>
           <div class="irow"><span class="ikey">Exp. Eligible</span><span class="ival">${(payload.experience || 0) >= (job.experience_required || 0)
             ? '✓ Yes (' + (payload.experience||0) + ' ≥ ' + (job.experience_required||0) + ' yrs)'
             : '✗ No (' + (payload.experience||0) + ' < ' + (job.experience_required||0) + ' yrs)'}</span></div>
         </div>
       </div>`;
 
-    // Insert before the matched job section
     const matchSection = $('matched-job-section');
     matchSection.parentNode.insertBefore(inlineDetail, matchSection);
+    matchSection.classList.remove('hidden');
 
-    $('matched-job-section').classList.remove('hidden');
+    const notice = $('db-saved-notice');
+    if (res.notification_saved) {
+      notice.classList.remove('hidden');
+    } else {
+      notice.classList.add('hidden');
+    }
   } else {
+    // 0 skills matched!
+    $('result-tag').textContent = 'No Skill Match';
+    $('result-tag').className = 'result-tag';
+    $('result-tag').style.background = 'rgba(239, 68, 68, 0.12)';
+    $('result-tag').style.color = '#ef4444';
+    $('result-tag').style.borderColor = 'rgba(239, 68, 68, 0.3)';
+
     $('matched-job-section').classList.add('hidden');
+    $('db-saved-notice').classList.add('hidden');
+
+    const alertBox = document.createElement('div');
+    alertBox.id = 'no-match-alert-box';
+    alertBox.className = 'no-match-box';
+    alertBox.innerHTML = `
+      <div style="font-weight:600;font-size:14px;color:var(--text-1);margin-bottom:6px">
+        ⚠️ No Matching Positions Found (0 Skills Matched)
+      </div>
+      <p style="font-size:13px;color:var(--text-3);line-height:1.5;margin-bottom:12px">
+        ${res.constraint_message || 'None of your entered skills match the requirements for listings in our database. Recommending a job with 0 matching skills would be inaccurate.'}
+      </p>
+      <div style="font-size:12px;color:var(--text-2);font-weight:600;margin-bottom:6px">
+        Technologies currently required across open listings:
+      </div>
+      <div class="sk-tags">
+        <span class="sk-tag">Python</span>
+        <span class="sk-tag">React</span>
+        <span class="sk-tag">Node.js</span>
+        <span class="sk-tag">AWS</span>
+        <span class="sk-tag">Azure</span>
+        <span class="sk-tag">Java</span>
+        <span class="sk-tag">Tensorflow</span>
+        <span class="sk-tag">Keras</span>
+        <span class="sk-tag">Data Science</span>
+      </div>`;
+
+    const matchSection = $('matched-job-section');
+    matchSection.parentNode.insertBefore(alertBox, matchSection);
   }
 
   // Constraint message
   const msg = $('constraint-msg');
-  msg.textContent = res.constraint_message || '';
-
-  // DB saved notice
-  const notice = $('db-saved-notice');
-  if (res.notification_saved) {
-    notice.classList.remove('hidden');
-  } else {
-    notice.classList.add('hidden');
-  }
+  if (msg) msg.textContent = res.constraint_message || '';
 }
 
 // ============ Jobs tab ============
