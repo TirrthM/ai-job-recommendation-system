@@ -3,401 +3,253 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JobMatch AI • Intelligent Job Recommender System</title>
-  <meta name="description" content="AI-powered Job Recommendation System using TF-IDF, Naive Bayes Classification, and MongoDB.">
-  <!-- Google Fonts -->
+  <title>AI Job Recommendation System</title>
+  <meta name="description" content="AI-powered Job Recommendation using TF-IDF and Naive Bayes Classification with MongoDB.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css?v=3">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=7">
 </head>
 <body>
-  <!-- Ambient background glow elements -->
-  <div class="glow-orb orb-1"></div>
-  <div class="glow-orb orb-2"></div>
-  <div class="glow-orb orb-3"></div>
 
-  <!-- Unified Header & Nav Bar -->
-  <header class="app-header">
-    <div class="header-container">
+  <!-- Top Header -->
+  <header class="topbar">
+    <div class="topbar-inner">
       <div class="brand">
-        <div class="brand-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-          </svg>
-        </div>
-        <div>
-          <h1 class="brand-title">JobMatch <span class="gradient-text">AI</span></h1>
-          <p class="brand-subtitle">Recommender Systems</p>
-        </div>
+        <div class="brand-dot"></div>
+        <span class="brand-name">AI Job Recommender</span>
       </div>
-
-      <!-- Navigation Tabs -->
-      <nav class="nav-bar">
-        <button class="nav-tab active" data-tab="tab-recommender" id="tab-btn-recommender">
-          <span class="tab-icon">🎯</span> Live Match
-        </button>
-        <button class="nav-tab" data-tab="tab-jobs" id="tab-btn-jobs">
-          <span class="tab-icon">💼</span> Jobs (<span id="count-jobs-badge">99</span>)
-        </button>
-        <button class="nav-tab" data-tab="tab-profiles" id="tab-btn-profiles">
-          <span class="tab-icon">👥</span> Profiles (<span id="count-profiles-badge">99</span>)
-        </button>
-        <button class="nav-tab" data-tab="tab-notifications" id="tab-btn-notifications">
-          <span class="tab-icon">🔔</span> Alerts (<span id="count-notifications-badge">0</span>)
-        </button>
-        <button class="nav-tab" data-tab="tab-analytics" id="tab-btn-analytics">
-          <span class="tab-icon">🧠</span> RS Theory
-        </button>
+      <nav class="nav-tabs" id="main-nav">
+        <button class="tab-btn active" data-tab="tab-recommender">Recommender</button>
+        <button class="tab-btn" data-tab="tab-jobs">Jobs</button>
+        <button class="tab-btn" data-tab="tab-profiles">Profiles</button>
+        <button class="tab-btn" data-tab="tab-alerts">Alerts</button>
       </nav>
-
-      <div class="system-status-pills">
-        <div class="status-pill active" id="db-status-pill">
-          <span class="status-dot"></span>
-          <span>MongoDB: <strong id="header-db-status">Online (27017)</strong></span>
-        </div>
+      <div class="topbar-actions">
+        <button class="theme-toggle-btn" id="theme-toggle" title="Toggle Light / Dark Mode" aria-label="Toggle theme">
+          <span class="theme-icon" id="theme-icon">🌙</span>
+          <span class="theme-label" id="theme-label">Dark</span>
+        </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Content Container -->
-  <main class="main-container">
+  <!-- Main -->
+  <main class="page">
 
-    <!-- ==================== TAB 1: LIVE RECOMMENDER ==================== -->
-    <section class="tab-content active" id="tab-recommender">
-      <div class="hero-banner">
-        <div>
-          <h2 class="hero-title">Intelligent Candidate Job Matching</h2>
-          <p class="hero-desc">
-            Test the Content-Based Filtering engine with existing MongoDB alumni profiles or simulate a custom candidate in real-time.
-          </p>
-        </div>
-        <div class="quick-preset-container">
-          <span class="preset-label">Quick Presets:</span>
-          <button class="preset-chip" id="preset-ml">🤖 Machine Learning</button>
-          <button class="preset-chip" id="preset-devops">⚙️ DevOps / Cloud</button>
-          <button class="preset-chip" id="preset-fullstack">💻 Full Stack Dev</button>
+    <!-- ===== TAB: RECOMMENDER ===== -->
+    <section class="tab-pane active" id="tab-recommender">
+      <div class="page-header">
+        <h1>Live Job Recommender</h1>
+        <p class="page-desc">Enter candidate details to get an AI-powered job match. The model uses TF-IDF vectorization and Multinomial Naive Bayes classification.</p>
+        <div class="preset-row">
+          <span class="preset-label">Load preset:</span>
+          <button class="preset-btn" id="preset-ml">ML Engineer</button>
+          <button class="preset-btn" id="preset-devops">DevOps / Cloud</button>
+          <button class="preset-btn" id="preset-fullstack">Full Stack Dev</button>
+          <button class="preset-btn" id="preset-data">Data Analyst</button>
         </div>
       </div>
 
-      <div class="recommender-grid">
-        <!-- Input Form Card -->
-        <div class="card glass-card form-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="card-badge">Candidate Input</span>
-              <h3 class="card-title">Candidate Profile Attributes</h3>
-            </div>
-            <div class="select-candidate-wrapper">
-              <label for="candidate-select" class="sr-only">Or pick an alumni profile</label>
-              <select id="candidate-select" class="form-select-sm">
-                <option value="">-- Load from MongoDB Profiles --</option>
-              </select>
-            </div>
+      <div class="two-col">
+        <!-- Input Panel -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">Candidate Input</span>
+            <select id="candidate-select" class="select-sm">
+              <option value="">— or load from database —</option>
+            </select>
           </div>
 
-          <form id="recommendation-form">
-            <div class="form-group">
-              <label for="candidate-name" class="form-label">Candidate Name</label>
-              <input type="text" id="candidate-name" class="form-input" placeholder="e.g. Alex Johnson" value="Alex Johnson" required>
+          <form id="recommendation-form" class="form-body">
+            <div class="field">
+              <label for="candidate-name">Full Name</label>
+              <input type="text" id="candidate-name" placeholder="e.g. Priya Sharma" value="Alex Kumar">
             </div>
 
-            <div class="form-group">
-              <label for="candidate-skills" class="form-label">
-                Technical Skills <span class="text-muted">(comma-separated)</span>
-              </label>
-              <input type="text" id="candidate-skills" class="form-input" placeholder="e.g. Python, TensorFlow, Azure, Docker" value="Python, TensorFlow, Azure, Keras" required>
-              
-              <!-- Quick Skill Tags to Click -->
-              <div class="skill-tag-suggestions">
-                <span class="suggest-label">Add:</span>
-                <button type="button" class="add-skill-tag" data-skill="Python">+ Python</button>
-                <button type="button" class="add-skill-tag" data-skill="TensorFlow">+ TensorFlow</button>
-                <button type="button" class="add-skill-tag" data-skill="React">+ React</button>
-                <button type="button" class="add-skill-tag" data-skill="Node.js">+ Node.js</button>
-                <button type="button" class="add-skill-tag" data-skill="AWS">+ AWS</button>
-                <button type="button" class="add-skill-tag" data-skill="Azure">+ Azure</button>
-                <button type="button" class="add-skill-tag" data-skill="ML">+ ML</button>
+            <div class="field">
+              <label for="candidate-skills">Skills <span class="hint">(comma separated)</span></label>
+              <input type="text" id="candidate-skills" placeholder="e.g. Python, TensorFlow, AWS" value="Python, TensorFlow, Azure, Keras">
+              <div class="chip-row">
+                <button type="button" class="chip" data-skill="Python">Python</button>
+                <button type="button" class="chip" data-skill="TensorFlow">TensorFlow</button>
+                <button type="button" class="chip" data-skill="React">React</button>
+                <button type="button" class="chip" data-skill="Node.js">Node.js</button>
+                <button type="button" class="chip" data-skill="AWS">AWS</button>
+                <button type="button" class="chip" data-skill="Azure">Azure</button>
+                <button type="button" class="chip" data-skill="ML">ML</button>
+                <button type="button" class="chip" data-skill="Keras">Keras</button>
+                <button type="button" class="chip" data-skill="Docker">Docker</button>
               </div>
             </div>
 
-            <div class="form-row">
-              <div class="form-group half-width">
-                <label for="candidate-experience" class="form-label">
-                  Experience: <strong id="exp-val-display" class="gradient-text">3 Years</strong>
-                </label>
-                <input type="range" id="candidate-experience" min="0" max="12" value="3" class="form-range">
-                <div class="range-marks">
-                  <span>0 yr (Fresher)</span>
-                  <span>5 yrs</span>
-                  <span>12+ yrs</span>
-                </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="candidate-experience">Experience: <strong id="exp-display">3 years</strong></label>
+                <input type="range" id="candidate-experience" min="0" max="12" value="3">
+                <div class="range-labels"><span>0 yr</span><span>6 yrs</span><span>12 yrs</span></div>
               </div>
-
-              <div class="form-group half-width">
-                <label for="candidate-location" class="form-label">Preferred Location</label>
-                <input type="text" id="candidate-location" class="form-input" placeholder="e.g. Pune, Bangalore, Remote" value="Bangalore">
+              <div class="field">
+                <label for="candidate-location">Location</label>
+                <input type="text" id="candidate-location" placeholder="e.g. Bangalore" value="Bangalore">
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="candidate-bio" class="form-label">Professional Bio / Background</label>
-              <textarea id="candidate-bio" class="form-textarea" rows="3" placeholder="Describe career aspirations, projects or expertise...">Passionate AI developer with background in training deep learning models and cloud deployment pipelines.</textarea>
+            <div class="field">
+              <label for="candidate-bio">Bio / Background</label>
+              <textarea id="candidate-bio" rows="3" placeholder="Brief professional summary...">Experienced AI developer with background in deep learning and cloud deployment.</textarea>
             </div>
 
-            <div class="form-actions">
-              <button type="submit" class="btn btn-primary" id="btn-predict">
-                <span class="btn-icon">⚡</span>
-                <span>Run AI Recommendation</span>
-              </button>
-            </div>
+            <button type="submit" class="btn-primary" id="btn-predict">Run AI Recommendation</button>
           </form>
         </div>
 
-        <!-- Output Result Card -->
-        <div class="card glass-card result-card" id="result-card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <span class="card-badge pulse-badge" id="result-status-badge">Awaiting Input</span>
-              <h3 class="card-title">Recommendation Results</h3>
-            </div>
-            <span class="badge badge-outline" id="result-exec-time">Real-time</span>
+        <!-- Result Panel -->
+        <div class="panel result-panel" id="result-card">
+          <div class="panel-head">
+            <span class="panel-title">Recommendation Result</span>
+            <span class="result-tag" id="result-tag">Awaiting input</span>
           </div>
 
-          <!-- Empty placeholder before recommendation -->
-          <div class="result-placeholder" id="result-placeholder">
-            <div class="placeholder-icon">🔮</div>
-            <h4>Ready to Predict</h4>
-            <p>Click <strong>"Run AI Recommendation"</strong> or pick an existing profile above to evaluate matching jobs.</p>
+          <!-- Placeholder -->
+          <div class="result-empty" id="result-placeholder">
+            <div class="empty-icon">◎</div>
+            <p>Fill the form and click <strong>Run AI Recommendation</strong><br>to see the prediction.</p>
           </div>
 
-          <!-- Actual Result Container (Hidden until prediction) -->
-          <div class="result-body hidden" id="result-body">
-            <!-- Predicted Role Banner -->
-            <div class="prediction-banner">
-              <div class="pred-label-text">
-                <span class="banner-sub">ML Classification Result:</span>
-                <h2 class="predicted-role-title" id="predicted-role-title">DevOps Engineer</h2>
+          <!-- Result Content -->
+          <div id="result-body" class="result-body hidden">
+
+            <!-- Predicted Role -->
+            <div class="result-role-row">
+              <div>
+                <div class="result-label">Predicted Job Role</div>
+                <div class="result-role" id="predicted-role-title">—</div>
               </div>
               <div class="confidence-box">
-                <div class="confidence-circle" id="confidence-circle">
-                  <span id="confidence-val">87%</span>
+                <div class="confidence-num" id="confidence-val">—%</div>
+                <div class="confidence-sub">Confidence</div>
+              </div>
+            </div>
+
+            <!-- Probability Bars -->
+            <div class="section-block">
+              <div class="section-label">Top Predictions (Multinomial Naive Bayes)</div>
+              <div id="prob-bars-container"></div>
+            </div>
+
+            <!-- Best Matched Job -->
+            <div class="section-block" id="matched-job-section">
+              <div class="section-label">Best Matched Job in Database</div>
+              <div class="job-match-card" id="job-match-card">
+                <div class="job-match-header">
+                  <div>
+                    <div class="jm-title" id="jm-title">—</div>
+                    <div class="jm-meta">
+                      <span id="jm-company">—</span>
+                      <span class="dot">·</span>
+                      <span id="jm-location">—</span>
+                      <span class="dot">·</span>
+                      <span id="jm-exp">Min 0 yrs</span>
+                    </div>
+                  </div>
+                  <div id="jm-badge"></div>
                 </div>
-                <span class="confidence-label">Model Confidence</span>
-              </div>
-            </div>
-
-            <!-- Probability Distribution Breakdown -->
-            <div class="prob-section">
-              <h4 class="section-micro-heading">Top Category Probabilities (Multinomial Naive Bayes)</h4>
-              <div class="prob-bars-container" id="prob-bars-container">
-                <!-- Dynamically populated -->
-              </div>
-            </div>
-
-            <!-- Best Matched Job Card -->
-            <div class="matched-job-spotlight" id="matched-job-spotlight">
-              <div class="spotlight-header">
-                <div>
-                  <span class="spotlight-tag">⭐ Best Matched Job Posting</span>
-                  <h3 class="spotlight-title" id="spotlight-title">Role Name</h3>
-                  <div class="spotlight-meta">
-                    <span class="meta-item" id="spotlight-company">🏢 Company</span>
-                    <span class="meta-item" id="spotlight-location">📍 Location</span>
-                    <span class="meta-item" id="spotlight-exp">⏳ Min Experience: 0 yrs</span>
+                <p class="jm-desc" id="jm-desc">—</p>
+                <div class="skills-compare">
+                  <div class="skills-row-item">
+                    <span class="sk-label">Required:</span>
+                    <div id="jm-req-skills" class="sk-tags"></div>
+                  </div>
+                  <div class="skills-row-item">
+                    <span class="sk-label">Your match:</span>
+                    <div id="jm-matched-skills" class="sk-tags"></div>
                   </div>
                 </div>
-                <div id="qualification-badge-container">
-                  <!-- Qualified or Unqualified badge -->
-                </div>
-              </div>
-
-              <p class="spotlight-desc" id="spotlight-desc">Job description details will be displayed here...</p>
-
-              <div class="skills-matched-box">
-                <div class="skills-row">
-                  <span class="skill-label">Required Skills:</span>
-                  <div class="skill-tags-group" id="spotlight-req-skills"></div>
-                </div>
-                <div class="skills-row highlight-row">
-                  <span class="skill-label">Skills You Match:</span>
-                  <div class="skill-tags-group" id="spotlight-matched-skills"></div>
-                </div>
-              </div>
-
-              <!-- Constraint Verification Alert -->
-              <div class="constraint-alert" id="constraint-alert">
-                <!-- Dynamically populated -->
+                <div id="constraint-msg" class="constraint-msg"></div>
               </div>
             </div>
 
-            <!-- MongoDB Notification Status Toast -->
-            <div class="db-notification-alert" id="db-notification-alert">
-              <span class="notif-check">✅</span>
-              <div>
-                <strong>Persisted to MongoDB:</strong>
-                <p>Saved notification record into <code>alumni_database.notifications</code></p>
-              </div>
+            <!-- MongoDB save status -->
+            <div id="db-saved-notice" class="db-notice hidden">
+              Recommendation saved to notifications
             </div>
+
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ==================== TAB 2: JOB CATALOG ==================== -->
-    <section class="tab-content" id="tab-jobs">
-      <div class="catalog-header-bar">
-        <div>
-          <h2 class="hero-title">Job Catalog in MongoDB</h2>
-          <p class="hero-desc">Explore the 99 active listings in <code>alumni_database.jobs</code>.</p>
-        </div>
-        <div class="catalog-filters">
-          <input type="text" id="job-search-input" class="search-input" placeholder="🔍 Search by skill, title, company...">
-          <select id="job-role-filter" class="form-select-sm">
-            <option value="">All Job Roles</option>
-          </select>
-        </div>
+    <!-- ===== TAB: JOBS ===== -->
+    <section class="tab-pane" id="tab-jobs">
+      <div class="page-header">
+        <h1>Job Listings</h1>
+        <p class="page-desc">All job postings stored in database.</p>
       </div>
-
-      <div class="jobs-grid" id="jobs-cards-container">
-        <!-- Dynamically rendered -->
+      <div class="toolbar">
+        <input type="text" id="job-search" class="search-box" placeholder="Search by title, company, skills, location…">
+        <select id="job-role-filter" class="select-sm">
+          <option value="">All Roles</option>
+        </select>
       </div>
+      <div class="card-grid" id="jobs-grid"></div>
     </section>
 
-    <!-- ==================== TAB 3: CANDIDATE PROFILES ==================== -->
-    <section class="tab-content" id="tab-profiles">
-      <div class="catalog-header-bar">
-        <div>
-          <h2 class="hero-title">Candidate Directory</h2>
-          <p class="hero-desc">Browse candidate profiles in <code>alumni_database.profiles</code> and trigger instant AI evaluation.</p>
-        </div>
-        <div class="catalog-filters">
-          <input type="text" id="profile-search-input" class="search-input" placeholder="🔍 Search candidate by name or skill...">
-        </div>
+    <!-- ===== TAB: PROFILES ===== -->
+    <section class="tab-pane" id="tab-profiles">
+      <div class="page-header">
+        <h1>Candidate Profiles</h1>
+        <p class="page-desc">All alumni candidate profiles stored in database.</p>
       </div>
-
-      <div class="profiles-grid" id="profiles-cards-container">
-        <!-- Dynamically rendered -->
+      <div class="toolbar">
+        <input type="text" id="profile-search" class="search-box" placeholder="Search by name, skills, location…">
       </div>
+      <div class="card-grid" id="profiles-grid"></div>
     </section>
 
-    <!-- ==================== TAB 4: MONGODB NOTIFICATIONS ==================== -->
-    <section class="tab-content" id="tab-notifications">
-      <div class="catalog-header-bar">
-        <div>
-          <h2 class="hero-title">MongoDB Notifications Dispatch</h2>
-          <p class="hero-desc">Live records stored in <code>alumni_database.notifications</code> for matched candidates.</p>
-        </div>
-        <div class="btn-group">
-          <button class="btn btn-secondary" id="btn-batch-eval">
-            <span>🚀 Run Batch for All 99 Candidates</span>
-          </button>
-          <button class="btn btn-danger" id="btn-clear-notifications">
-            <span>🗑️ Clear Notifications</span>
-          </button>
+    <!-- ===== TAB: ALERTS ===== -->
+    <section class="tab-pane" id="tab-alerts">
+      <div class="page-header">
+        <h1>Recommendation Alerts</h1>
+        <p class="page-desc">AI-generated matches. Click any row to view full candidate and job details.</p>
+        <div class="action-row">
+          <button class="btn-secondary" id="btn-batch">Run Batch (All 99 Candidates)</button>
+          <button class="btn-danger" id="btn-clear">Clear All Alerts</button>
         </div>
       </div>
-
-      <div class="notifications-list" id="notifications-list-container">
-        <!-- Dynamically rendered -->
-      </div>
-    </section>
-
-    <!-- ==================== TAB 5: RS ARCHITECTURE & THEORY ==================== -->
-    <section class="tab-content" id="tab-analytics">
-      <div class="theory-hero">
-        <h2 class="hero-title">Recommender System Architecture & Theory</h2>
-        <p class="hero-desc">Comprehensive theoretical foundation for Academic viva, project report, and demonstration.</p>
-      </div>
-
-      <!-- 4-Stage Pipeline Diagram -->
-      <div class="pipeline-section">
-        <h3 class="pipeline-title">Recommender System Processing Pipeline</h3>
-        <div class="pipeline-grid">
-          <div class="pipeline-step-card">
-            <div class="step-num">01</div>
-            <h4>Feature Vectorization</h4>
-            <p class="step-tech">TF-IDF Vector Space</p>
-            <p class="step-desc">Transforms unstructured text (skills & bios) into statistical term-frequency and inverse-document-frequency vectors.</p>
-            <span class="code-pill">TfidfVectorizer(stop_words='english')</span>
-          </div>
-
-          <div class="pipeline-arrow">➔</div>
-
-          <div class="pipeline-step-card">
-            <div class="step-num">02</div>
-            <h4>Supervised Matching</h4>
-            <p class="step-tech">Multinomial Naive Bayes</p>
-            <p class="step-desc">Calculates posterior probabilities $P(\text{Role} \mid \text{Skills})$ to classify candidates into the most suitable target job role.</p>
-            <span class="code-pill">MultinomialNB()</span>
-          </div>
-
-          <div class="pipeline-arrow">➔</div>
-
-          <div class="pipeline-step-card">
-            <div class="step-num">03</div>
-            <h4>Constraint Filtering</h4>
-            <p class="step-tech">Rule-Based Post-Filter</p>
-            <p class="step-desc">Enforces hard business rules: checks if candidate experience meets or exceeds minimum job requirement.</p>
-            <span class="code-pill">exp_candidate >= exp_required</span>
-          </div>
-
-          <div class="pipeline-arrow">➔</div>
-
-          <div class="pipeline-step-card">
-            <div class="step-num">04</div>
-            <h4>Push Delivery</h4>
-            <p class="step-tech">MongoDB Persistence</p>
-            <p class="step-desc">Stores matching alerts as structured JSON documents into the <code>notifications</code> collection for asynchronous user retrieval.</p>
-            <span class="code-pill">db.notifications.insert_one()</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Theory comparison cards -->
-      <div class="theory-grid">
-        <div class="card glass-card">
-          <h4 class="theory-card-title">Why Content-Based vs. Collaborative Filtering?</h4>
-          <p class="theory-text">
-            <strong>Collaborative Filtering (CF)</strong> relies on user interaction matrices (e.g., job application histories, clicks, ratings). In student or job boards, new jobs and fresh alumni experience the <em>Cold Start Problem</em>.
-          </p>
-          <p class="theory-text">
-            <strong>Content-Based Filtering (CBF)</strong> circumvents this by analyzing intrinsic item attributes (skills, experience, job descriptions). Every candidate receives recommendations immediately upon profile creation.
-          </p>
-        </div>
-
-        <div class="card glass-card">
-          <h4 class="theory-card-title">Mathematical Formulation of Naive Bayes</h4>
-          <p class="theory-text">
-            The classifier uses Bayes' Theorem with conditional feature independence:
-          </p>
-          <div class="math-box">
-            $$P(C_k \mid x) = \frac{P(C_k) \prod_{i=1}^{n} P(x_i \mid C_k)}{P(x)}$$
-          </div>
-          <p class="theory-text">
-            Where $C_k$ is the Job Title category and $x_i$ represents the TF-IDF feature weight of a specific tech skill.
-          </p>
-        </div>
-
-        <div class="card glass-card">
-          <h4 class="theory-card-title">Dataset Metrics & Distribution</h4>
-          <div class="stats-mini-list" id="stats-skills-list">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
+      <table class="alerts-table" id="alerts-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Candidate</th>
+            <th>Candidate City</th>
+            <th>Recommended Role</th>
+            <th>Company</th>
+            <th>Job Location</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="alerts-tbody"></tbody>
+      </table>
+      <div class="table-empty hidden" id="alerts-empty">
+        <p>No alerts yet. Use the <strong>Recommender</strong> tab or click <strong>Run Batch</strong> to generate recommendations.</p>
       </div>
     </section>
 
   </main>
 
-  <!-- Footer -->
-  <footer class="app-footer">
-    <div class="footer-container">
-      <p>AI Job Recommendation System • Recommender Systems Project • Connected to MongoDB (<code>localhost:27017</code>)</p>
-      <div class="footer-badge">Python 3.11 • scikit-learn • Flask • PyMongo</div>
+  <!-- Alert Detail Modal -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal" id="detail-modal">
+      <div class="modal-header">
+        <h2 id="modal-title">Recommendation Detail</h2>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <div class="modal-loading">Loading details…</div>
+      </div>
     </div>
-  </footer>
+  </div>
 
-  <script src="/static/app.js?v=3"></script>
+  <script src="/static/app.js?v=8"></script>
 </body>
 </html>

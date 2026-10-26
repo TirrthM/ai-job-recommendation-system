@@ -9,6 +9,7 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 engine = RecommendationEngine()
 
 def get_db():
@@ -102,7 +103,9 @@ def get_profiles():
 def get_notifications():
     client, db = get_db()
     try:
-        notifications = list(db['notifications'].find({}, {"_id": 0}))
+        notifications = list(db['notifications'].find({}))
+        for n in notifications:
+            n['_id'] = str(n['_id'])
         return jsonify(notifications[::-1])  # newest first
     finally:
         client.close()
@@ -116,13 +119,126 @@ def clear_notifications():
     finally:
         client.close()
 
+@app.route('/api/notification-detail')
+def notification_detail():
+    """Return enriched notification with full user profile and full job details.
+    Uses notif_id, user_name, job_title, company, and location to ensure 100% exact job match.
+    For new users not in DB, reconstructs profile from candidate fields saved in notification.
+    """
+    notif_id     = request.args.get('notif_id', '').strip()
+    user_name    = request.args.get('user_name', '').strip()
+    job_title    = request.args.get('job_title', '').strip()
+    company      = request.args.get('company', '').strip()
+    job_location = request.args.get('job_location', '').strip() or request.args.get('location', '').strip()
+
+    client, db = get_db()
+    try:
+        # 1. Try to find the exact notification document
+        notif = None
+        if notif_id:
+            try:
+                from bson import ObjectId
+                notif = db['notifications'].find_one({"_id": ObjectId(notif_id)})
+            except Exception:
+                pass
+
+        if not notif and user_name:
+            query = {"user_name": user_name}
+            if job_title:
+                query["job_title"] = job_title
+            if company:
+                query["company"] = company
+            if job_location:
+                query["location"] = job_location
+            notif = db['notifications'].find_one(query, sort=[("_id", -1)])
+
+        if not notif and user_name and job_title:
+            notif = db['notifications'].find_one(
+                {"user_name": user_name, "job_title": job_title},
+                sort=[("_id", -1)]
+            )
+
+        if not notif and user_name:
+            notif = db['notifications'].find_one({"user_name": user_name}, sort=[("_id", -1)])
+
+        # 2. Try to find a proper profile in the profiles collection
+        profile = db['profiles'].find_one({"name": user_name}, {"_id": 0})
+
+        # 3. If no DB profile, reconstruct from notification's stored candidate fields
+        if not profile and notif:
+            profile = {
+                "name":       notif.get("user_name", user_name),
+                "skills":     notif.get("candidate_skills", ""),
+                "experience": notif.get("candidate_experience", 0),
+                "location":   notif.get("candidate_location", ""),
+                "bio":        notif.get("candidate_bio", ""),
+                "email":      "(not in database)",
+            }
+
+        # 4. Find the matched job using title, company, AND location
+        target_loc = job_location or (notif.get("location") if notif else None)
+        target_title = job_title or (notif.get("job_title") if notif else None)
+        target_company = company or (notif.get("company") if notif else None)
+
+        job = None
+        if target_title and target_company and target_loc:
+            job = db['jobs'].find_one({
+                "title": target_title,
+                "company": target_company,
+                "location": target_loc
+            }, {"_id": 0})
+
+        if not job and target_title and target_loc:
+            job = db['jobs'].find_one({
+                "title": target_title,
+                "location": target_loc
+            }, {"_id": 0})
+
+        if not job and target_title and target_company:
+            job = db['jobs'].find_one({
+                "title": target_title,
+                "company": target_company
+            }, {"_id": 0})
+
+        if not job and target_title:
+            job = db['jobs'].find_one({"title": target_title}, {"_id": 0})
+
+        # Fallback to the job data snapshot saved directly in the notification
+        if not job and notif:
+            job = {
+                "title":               notif.get("job_title"),
+                "company":             notif.get("company"),
+                "location":            notif.get("location"),
+                "description":         notif.get("description"),
+                "required_skills":     notif.get("required_skills", ""),
+                "experience_required": notif.get("experience_required", 0),
+            }
+        elif job and notif:
+            # Guarantee the displayed job location and description match the notification
+            if notif.get("location"):
+                job["location"] = notif.get("location")
+            if notif.get("description"):
+                job["description"] = notif.get("description")
+            if not job.get("required_skills") and notif.get("required_skills"):
+                job["required_skills"] = notif.get("required_skills")
+            if not job.get("experience_required") and notif.get("experience_required") is not None:
+                job["experience_required"] = notif.get("experience_required")
+
+        return jsonify({
+            "profile": profile or {},
+            "job":     job or {}
+        })
+    finally:
+        client.close()
+
 @app.route('/api/recommend', methods=['POST'])
 def recommend():
     data = request.get_json() or {}
-    skills = data.get('skills', '')
-    bio = data.get('bio', '')
-    experience = data.get('experience', 0)
-    user_name = data.get('name', 'Interactive Candidate')
+    skills            = data.get('skills', '')
+    bio               = data.get('bio', '')
+    experience        = data.get('experience', 0)
+    user_name         = data.get('name', 'Interactive Candidate')
+    location          = data.get('location', '')
     save_notification = data.get('save_notification', True)
 
     result = engine.recommend(
@@ -130,6 +246,7 @@ def recommend():
         bio=bio,
         experience=experience,
         user_name=user_name,
+        location=location,
         save_notification=save_notification
     )
     return jsonify(result)

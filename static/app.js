@@ -1,530 +1,629 @@
-// ==========================================================
-// JobMatch AI • Frontend Application Logic
-// ==========================================================
+// ============================================================
+//  AI Job Recommendation – Frontend Application
+// ============================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-  // Global State
-  let allJobs = [];
-  let allProfiles = [];
-  let allNotifications = [];
-  let statsData = {};
+const API = '';   // same-origin Flask
 
-  // DOM Elements
-  const tabs = document.querySelectorAll('.nav-tab');
-  const tabContents = document.querySelectorAll('.tab-content');
+// ============ Utility ============
 
-  const expRange = document.getElementById('candidate-experience');
-  const expDisplay = document.getElementById('exp-val-display');
+function $(id) { return document.getElementById(id); }
 
-  const candidateSelect = document.getElementById('candidate-select');
-  const form = document.getElementById('recommendation-form');
-  const btnPredict = document.getElementById('btn-predict');
+function req(url, opts = {}) {
+  return fetch(API + url, opts).then(r => r.json());
+}
 
-  const resultPlaceholder = document.getElementById('result-placeholder');
-  const resultBody = document.getElementById('result-body');
-  const resultStatusBadge = document.getElementById('result-status-badge');
+function skillList(raw) {
+  if (!raw) return [];
+  return raw.split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+}
 
-  // Tab Switching
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tabContents.forEach(c => c.classList.remove('active'));
+function tagsHtml(skills, matchSet) {
+  return skills.map(s => {
+    const cls = matchSet && matchSet.has(s.toLowerCase()) ? 'sk-tag match' : 'sk-tag';
+    return `<span class="${cls}">${s}</span>`;
+  }).join('');
+}
 
-      tab.classList.add('active');
-      const targetTabId = tab.getAttribute('data-tab');
-      const targetContent = document.getElementById(targetTabId);
-      if (targetContent) {
-        targetContent.classList.add('active');
-      }
+function cardTagsHtml(arr) {
+  return arr.slice(0, 6).map(s => `<span class="card-tag">${s}</span>`).join('');
+}
 
-      // Refresh specific tab data on switch
-      if (targetTabId === 'tab-notifications') {
-        loadNotifications();
-      } else if (targetTabId === 'tab-jobs') {
-        loadJobs();
-      } else if (targetTabId === 'tab-profiles') {
-        loadProfiles();
-      }
-    });
-  });
+// ============ Theme Management (Light / Dark) ============
 
-  // Utility: Debounce function for smooth real-time auto-calculation
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
+function initTheme() {
+  const toggleBtn = $('theme-toggle');
+  const icon = $('theme-icon');
+  const label = $('theme-label');
 
-  const debouncedRecommend = debounce(() => {
-    triggerRecommend();
-  }, 350);
+  // Load saved theme or default to light
+  const savedTheme = localStorage.getItem('app-theme') || 'light';
+  applyTheme(savedTheme);
 
-  // Experience Slider Display & Live Auto-Recommend
-  if (expRange && expDisplay) {
-    expRange.addEventListener('input', (e) => {
-      const val = e.target.value;
-      expDisplay.textContent = `${val} Year${val === '1' ? '' : 's'}`;
-      debouncedRecommend();
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      localStorage.setItem('app-theme', next);
     });
   }
 
-  // Real-time live calculation as user types skills or bio
-  document.getElementById('candidate-skills')?.addEventListener('input', debouncedRecommend);
-  document.getElementById('candidate-bio')?.addEventListener('input', debouncedRecommend);
-  document.getElementById('candidate-location')?.addEventListener('input', debouncedRecommend);
-  document.getElementById('candidate-name')?.addEventListener('input', debouncedRecommend);
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'dark') {
+      if (icon) icon.textContent = '☀️';
+      if (label) label.textContent = 'Light';
+    } else {
+      if (icon) icon.textContent = '🌙';
+      if (label) label.textContent = 'Dark';
+    }
+  }
+}
 
-  // Quick Preset Handlers
-  document.getElementById('preset-ml')?.addEventListener('click', () => {
-    document.getElementById('candidate-name').value = 'Dr. Priya Sharma';
-    document.getElementById('candidate-skills').value = 'Python, ML, TensorFlow, Keras, Data Science';
-    document.getElementById('candidate-experience').value = 4;
-    expDisplay.textContent = '4 Years';
-    document.getElementById('candidate-location').value = 'Hyderabad';
-    document.getElementById('candidate-bio').value = 'Senior machine learning practitioner experienced with deep neural networks and NLP architectures.';
-    triggerRecommend();
-  });
+// ============ Tab navigation ============
 
-  document.getElementById('preset-devops')?.addEventListener('click', () => {
-    document.getElementById('candidate-name').value = 'Rohan Verma';
-    document.getElementById('candidate-skills').value = 'AWS, Azure, Docker, Linux, Kubernetes, Python';
-    document.getElementById('candidate-experience').value = 5;
-    expDisplay.textContent = '5 Years';
-    document.getElementById('candidate-location').value = 'Pune';
-    document.getElementById('candidate-bio').value = 'DevOps specialist focused on automated CI/CD pipelines, cloud orchestration, and high availability systems.';
-    triggerRecommend();
-  });
-
-  document.getElementById('preset-fullstack')?.addEventListener('click', () => {
-    document.getElementById('candidate-name').value = 'Aarav Mehta';
-    document.getElementById('candidate-skills').value = 'React, Node.js, JavaScript, MongoDB, Express';
-    document.getElementById('candidate-experience').value = 2;
-    expDisplay.textContent = '2 Years';
-    document.getElementById('candidate-location').value = 'Bangalore';
-    document.getElementById('candidate-bio').value = 'Full-stack engineer passionate about responsive user interfaces, RESTful microservices, and modern web frameworks.';
-    triggerRecommend();
-  });
-
-  // Clickable Skill Suggestion Tags with instant re-calculation
-  document.querySelectorAll('.add-skill-tag').forEach(btn => {
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const skill = btn.getAttribute('data-skill');
-      const input = document.getElementById('candidate-skills');
-      const current = input.value.trim();
-      if (!current) {
-        input.value = skill;
-      } else if (!current.toLowerCase().includes(skill.toLowerCase())) {
-        input.value = `${current}, ${skill}`;
-      }
-      triggerRecommend();
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const targetPane = $(btn.dataset.tab);
+      if (targetPane) targetPane.classList.add('active');
+      if (btn.dataset.tab === 'tab-jobs') loadJobs();
+      if (btn.dataset.tab === 'tab-profiles') loadProfiles();
+      if (btn.dataset.tab === 'tab-alerts') loadAlerts();
     });
   });
+}
 
-  // Load Initial Data
-  loadStats();
-  loadCandidateDropdown();
-  loadJobs();
-  loadProfiles();
-  loadNotifications();
+// ============ Stats & Dropdowns ============
 
-  // Load Stats from API
-  async function loadStats() {
-    try {
-      const res = await fetch('/api/stats');
-      statsData = await res.json();
-
-      document.getElementById('count-jobs-badge').textContent = statsData.total_jobs || '99';
-      document.getElementById('count-profiles-badge').textContent = statsData.total_profiles || '99';
-      document.getElementById('count-notifications-badge').textContent = statsData.total_notifications || '0';
-
-      // Populate Role Filter Dropdown in Catalog
-      const roleFilter = document.getElementById('job-role-filter');
-      if (roleFilter && statsData.classes) {
-        roleFilter.innerHTML = '<option value="">All Job Roles</option>';
-        statsData.classes.forEach(cls => {
-          const opt = document.createElement('option');
-          opt.value = cls;
-          opt.textContent = cls;
-          roleFilter.appendChild(opt);
-        });
-      }
-
-      // Populate Theory Stats List
-      const skillsList = document.getElementById('stats-skills-list');
-      if (skillsList && statsData.top_skills) {
-        skillsList.innerHTML = statsData.top_skills.map(s => `
-          <div class="stat-item">
-            <span><strong>${s.skill}</strong> in job postings</span>
-            <span class="code-pill">${s.count} mentions</span>
-          </div>
-        `).join('');
-      }
-    } catch (err) {
-      console.error('Error fetching stats:', err);
+async function loadStats() {
+  try {
+    const d = await req('/api/stats');
+    // populate candidate dropdown
+    const sel = $('candidate-select');
+    if (sel) {
+      sel.innerHTML = '<option value="">— or load from database —</option>';
+      const profiles = await req('/api/profiles');
+      profiles.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = JSON.stringify(p);
+        opt.textContent = p.name || 'Unknown';
+        sel.appendChild(opt);
+      });
     }
-  }
-
-  // Populate Candidate Select Dropdown
-  async function loadCandidateDropdown() {
-    try {
-      const res = await fetch('/api/profiles');
-      allProfiles = await res.json();
-
-      if (candidateSelect) {
-        candidateSelect.innerHTML = '<option value="">-- Load from MongoDB Profiles --</option>';
-        allProfiles.forEach((p, idx) => {
-          const opt = document.createElement('option');
-          opt.value = idx;
-          opt.textContent = `${p.name} (${p.experience || 0} yrs exp • ${p.skills || 'No skills'})`;
-          candidateSelect.appendChild(opt);
-        });
-
-        candidateSelect.addEventListener('change', (e) => {
-          const idx = e.target.value;
-          if (idx !== '') {
-            const p = allProfiles[idx];
-            document.getElementById('candidate-name').value = p.name || '';
-            document.getElementById('candidate-skills').value = p.skills || '';
-            const exp = p.experience || 0;
-            document.getElementById('candidate-experience').value = exp;
-            expDisplay.textContent = `${exp} Year${exp === 1 ? '' : 's'}`;
-            document.getElementById('candidate-location').value = p.location || '';
-            document.getElementById('candidate-bio').value = p.bio || '';
-            triggerRecommend();
-          }
-        });
-      }
-    } catch (err) {
-      console.error('Error loading profiles:', err);
+    // populate role filter
+    const roleFilter = $('job-role-filter');
+    if (roleFilter) {
+      roleFilter.innerHTML = '<option value="">All Roles</option>';
+      (d.classes || []).forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r; opt.textContent = r;
+        roleFilter.appendChild(opt);
+      });
     }
-  }
+  } catch (e) { console.error('Stats error', e); }
+}
 
-  // Handle Form Submission
-  form?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    triggerRecommend(true);
+// ============ Candidate dropdown load ============
+
+function initCandidateDropdown() {
+  const sel = $('candidate-select');
+  if (!sel) return;
+  sel.addEventListener('change', function() {
+    if (!this.value) return;
+    try {
+      const p = JSON.parse(this.value);
+      if (p.name) $('candidate-name').value = p.name;
+      if (p.skills) $('candidate-skills').value = p.skills;
+      if (p.experience !== undefined) {
+        $('candidate-experience').value = p.experience;
+        $('exp-display').textContent = p.experience + ' year' + (p.experience !== 1 ? 's' : '');
+      }
+      if (p.bio) $('candidate-bio').value = p.bio;
+      if (p.location) $('candidate-location').value = p.location;
+    } catch {}
   });
+}
 
-  async function triggerRecommend(saveToDb = false) {
-    const name = document.getElementById('candidate-name').value.trim();
-    const skills = document.getElementById('candidate-skills').value.trim();
-    const exp = parseInt(document.getElementById('candidate-experience').value || 0);
-    const bio = document.getElementById('candidate-bio').value.trim();
-    const location = document.getElementById('candidate-location').value.trim();
+// ============ Experience slider ============
 
-    if (!skills && !bio) {
-      return;
-    }
+function initSlider() {
+  const slider = $('candidate-experience');
+  const display = $('exp-display');
+  if (!slider || !display) return;
+  slider.addEventListener('input', () => {
+    const v = parseInt(slider.value);
+    display.textContent = v + ' year' + (v !== 1 ? 's' : '');
+  });
+}
 
-    const resultCard = document.getElementById('result-card');
-    resultCard?.classList.add('recalculating');
-    resultStatusBadge.textContent = '⚡ Computing AI Match...';
-    resultStatusBadge.className = 'card-badge pulse-badge';
+// ============ Preset buttons ============
+
+const PRESETS = {
+  'preset-ml': {
+    name: 'Ananya Iyer', experience: 4, location: 'Bangalore',
+    skills: 'Python, TensorFlow, Keras, Scikit-learn, Machine Learning, NLP',
+    bio: 'ML researcher with focus on NLP and deep learning.'
+  },
+  'preset-devops': {
+    name: 'Rahul Singh', experience: 5, location: 'Hyderabad',
+    skills: 'Docker, Kubernetes, AWS, Terraform, CI/CD, Linux',
+    bio: 'Cloud-native DevOps engineer with extensive AWS experience.'
+  },
+  'preset-fullstack': {
+    name: 'Meera Nair', experience: 3, location: 'Pune',
+    skills: 'React, Node.js, TypeScript, MongoDB, REST API, HTML, CSS',
+    bio: 'Full stack developer building scalable web applications.'
+  },
+  'preset-data': {
+    name: 'Vikram Patel', experience: 2, location: 'Mumbai',
+    skills: 'Python, SQL, Pandas, Tableau, Power BI, Data Visualization',
+    bio: 'Data analyst with strong skills in business intelligence tools.'
+  }
+};
+
+function initPresets() {
+  Object.keys(PRESETS).forEach(id => {
+    const btn = $(id);
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const p = PRESETS[id];
+      $('candidate-name').value = p.name;
+      $('candidate-skills').value = p.skills;
+      $('candidate-experience').value = p.experience;
+      $('exp-display').textContent = p.experience + ' years';
+      $('candidate-bio').value = p.bio;
+      $('candidate-location').value = p.location;
+      if ($('candidate-select')) $('candidate-select').value = '';
+    });
+  });
+}
+
+// ============ Skill chips ============
+
+function initSkillChips() {
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const skillInput = $('candidate-skills');
+      const current = skillInput.value.split(',').map(s => s.trim()).filter(Boolean);
+      const skill = chip.dataset.skill;
+      if (!current.map(s => s.toLowerCase()).includes(skill.toLowerCase())) {
+        current.push(skill);
+        skillInput.value = current.join(', ');
+      }
+    });
+  });
+}
+
+// ============ Recommender form submit ============
+
+function initRecommendForm() {
+  const form = $('recommendation-form');
+  const btn = $('btn-predict');
+  if (!form || !btn) return;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+    $('result-tag').className = 'result-tag loading';
+    $('result-tag').textContent = 'Processing…';
+    $('result-placeholder').classList.add('hidden');
+    $('result-body').classList.add('hidden');
+
+    const payload = {
+      name: $('candidate-name').value || 'Candidate',
+      skills: $('candidate-skills').value,
+      bio: $('candidate-bio').value,
+      experience: parseInt($('candidate-experience').value) || 0,
+      location: $('candidate-location').value,
+      save_notification: true
+    };
 
     try {
-      const startTime = performance.now();
-      const res = await fetch('/api/recommend', {
+      const res = await req('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name || 'Candidate',
-          skills: skills,
-          experience: exp,
-          bio: bio,
-          location: location,
-          save_notification: saveToDb
-        })
+        body: JSON.stringify(payload)
       });
-
-      const data = await res.json();
-      const endTime = performance.now();
-      document.getElementById('result-exec-time').textContent = `${Math.round(endTime - startTime)}ms`;
-
-      renderRecommendationResult(data, exp, skills);
-      resultStatusBadge.textContent = saveToDb ? '✅ Saved to MongoDB' : '✅ Live AI Match';
-      resultStatusBadge.className = 'card-badge pulse-badge';
-      if (saveToDb) {
-        loadStats();
-      }
-    } catch (err) {
-      console.error('Recommendation failed:', err);
-    } finally {
-      setTimeout(() => {
-        resultCard?.classList.remove('recalculating');
-      }, 250);
-    }
-  }
-
-  // Render Recommendation Results
-  function renderRecommendationResult(data, userExp, userSkillsRaw) {
-    if (!data.success) {
-      alert(data.error || 'No recommendation available');
-      return;
-    }
-
-    resultPlaceholder.classList.add('hidden');
-    resultBody.classList.remove('hidden');
-    resultStatusBadge.textContent = 'Recommendation Generated';
-
-    // 1. Predicted Role Banner
-    document.getElementById('predicted-role-title').textContent = data.predicted_role;
-    document.getElementById('confidence-val').textContent = `${Math.round(data.confidence)}%`;
-
-    // 2. Probability Distribution Bars
-    const probContainer = document.getElementById('prob-bars-container');
-    if (probContainer && data.top_predictions) {
-      probContainer.innerHTML = data.top_predictions.map(p => `
-        <div class="prob-bar-row">
-          <div class="prob-bar-label">
-            <span>${p.title}</span>
-            <span><strong>${p.confidence}%</strong></span>
-          </div>
-          <div class="prob-bar-track">
-            <div class="prob-bar-fill" style="width: ${Math.max(p.confidence, 4)}%;"></div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    // 3. Best Matched Job Card & Constraint Check
-    const spotlight = data.best_match;
-    const qualContainer = document.getElementById('qualification-badge-container');
-    const alertBox = document.getElementById('constraint-alert');
-
-    if (spotlight) {
-      document.getElementById('spotlight-title').textContent = spotlight.title;
-      document.getElementById('spotlight-company').textContent = `🏢 ${spotlight.company}`;
-      document.getElementById('spotlight-location').textContent = `📍 ${spotlight.location}`;
-      document.getElementById('spotlight-exp').textContent = `⏳ Min Experience: ${spotlight.experience_required} yrs`;
-      document.getElementById('spotlight-desc').textContent = spotlight.description;
-
-      // Required Skills Pills
-      const reqSkillsDiv = document.getElementById('spotlight-req-skills');
-      const reqSkillsArr = (spotlight.required_skills || '').split(',').map(s => s.trim()).filter(Boolean);
-      reqSkillsDiv.innerHTML = reqSkillsArr.map(s => `<span class="skill-pill">${s}</span>`).join('');
-
-      // Matched Skills Pills
-      const matchedSkillsDiv = document.getElementById('spotlight-matched-skills');
-      if (spotlight.matched_skills && spotlight.matched_skills.length > 0) {
-        matchedSkillsDiv.innerHTML = spotlight.matched_skills.map(s => `<span class="skill-pill matched">✓ ${s.toUpperCase()}</span>`).join('');
-      } else {
-        matchedSkillsDiv.innerHTML = '<span class="text-dim">Overall role similarity match via TF-IDF</span>';
-      }
-
-      // Constraint verification
-      qualContainer.innerHTML = `<span class="badge-qualified">✓ Qualified Candidate</span>`;
-      alertBox.className = 'constraint-alert qualified';
-      alertBox.innerHTML = `
-        <span>✅</span>
-        <div>
-          <strong>Experience Constraint Passed:</strong>
-          Candidate has <strong>${userExp} years</strong> experience, which satisfies the required <strong>${spotlight.experience_required} years</strong>.
-        </div>
-      `;
-    } else {
-      // Experience conflict
-      document.getElementById('spotlight-title').textContent = `${data.predicted_role} (Position Found)`;
-      document.getElementById('spotlight-company').textContent = 'Multiple Companies';
-      document.getElementById('spotlight-location').textContent = 'Various Locations';
-      document.getElementById('spotlight-exp').textContent = 'Requirements Not Met';
-      document.getElementById('spotlight-desc').textContent = 'The AI model matched your technical skill profile with this job title, but all currently open listings require higher years of experience than the candidate currently holds.';
-
-      qualContainer.innerHTML = `<span class="badge-unqualified">⚠️ Experience Mismatch</span>`;
-      alertBox.className = 'constraint-alert unqualified';
-      alertBox.innerHTML = `
-        <span>⚠️</span>
-        <div>
-          <strong>Constraint Rule Check:</strong>
-          Candidate has <strong>${userExp} years</strong>. All available ${data.predicted_role} positions in MongoDB require higher experience. (Post-filtering applied).
-        </div>
-      `;
-      document.getElementById('spotlight-req-skills').innerHTML = '<span class="text-dim">N/A</span>';
-      document.getElementById('spotlight-matched-skills').innerHTML = '<span class="text-dim">N/A</span>';
-    }
-
-    // 4. Notification Alert Box
-    const notifAlert = document.getElementById('db-notification-alert');
-    if (data.notification_saved) {
-      notifAlert.classList.remove('hidden');
-    } else {
-      notifAlert.classList.add('hidden');
-    }
-  }
-
-  // Load and Render Jobs
-  async function loadJobs() {
-    const container = document.getElementById('jobs-cards-container');
-    if (!container) return;
-
-    const query = document.getElementById('job-search-input')?.value.trim() || '';
-    const role = document.getElementById('job-role-filter')?.value.trim() || '';
-
-    let url = `/api/jobs?q=${encodeURIComponent(query)}`;
-    if (role) url += `&role=${encodeURIComponent(role)}`;
-
-    try {
-      const res = await fetch(url);
-      allJobs = await res.json();
-
-      container.innerHTML = allJobs.map(job => {
-        const skills = (job.required_skills || '').split(',').map(s => `<span class="skill-pill">${s.trim()}</span>`).join('');
-        return `
-          <div class="job-card">
-            <div>
-              <div class="job-card-top">
-                <span class="company-badge">${job.company}</span>
-                <span class="exp-badge">Min ${job.experience_required} yrs</span>
-              </div>
-              <h3 class="job-card-title">${job.title}</h3>
-              <p class="job-card-desc">${job.description}</p>
-            </div>
-            <div class="job-card-footer">
-              <span class="meta-item">📍 ${job.location}</span>
-              <div class="skill-tags-group">${skills}</div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    } catch (err) {
-      console.error('Error fetching jobs:', err);
-    }
-  }
-
-  document.getElementById('job-search-input')?.addEventListener('input', debounce(loadJobs, 300));
-  document.getElementById('job-role-filter')?.addEventListener('change', loadJobs);
-
-  // Load and Render Profiles
-  async function loadProfiles() {
-    const container = document.getElementById('profiles-cards-container');
-    if (!container) return;
-
-    const query = document.getElementById('profile-search-input')?.value.trim() || '';
-    try {
-      const res = await fetch(`/api/profiles?q=${encodeURIComponent(query)}`);
-      const profiles = await res.json();
-
-      container.innerHTML = profiles.map((p, idx) => {
-        const skills = (p.skills || '').split(',').map(s => `<span class="skill-pill">${s.trim()}</span>`).join('');
-        return `
-          <div class="profile-card">
-            <div>
-              <div class="profile-card-top">
-                <span class="company-badge">Candidate #${idx + 1}</span>
-                <span class="exp-badge">${p.experience || 0} yrs exp</span>
-              </div>
-              <h3 class="profile-card-title">${p.name}</h3>
-              <p class="profile-card-bio">${p.bio || 'No bio provided.'}</p>
-            </div>
-            <div class="profile-card-footer">
-              <span class="meta-item">📍 ${p.location || 'Remote'}</span>
-              <button class="btn-card-action" onclick="window.pickProfile(${idx})">🎯 Test Match</button>
-            </div>
-          </div>
-        `;
-      }).join('');
-    } catch (err) {
-      console.error('Error fetching profiles:', err);
-    }
-  }
-
-  document.getElementById('profile-search-input')?.addEventListener('input', debounce(loadProfiles, 300));
-
-  // Quick helper to select candidate from profile card
-  window.pickProfile = function(idx) {
-    if (candidateSelect) {
-      candidateSelect.value = idx;
-      candidateSelect.dispatchEvent(new Event('change'));
-      // Switch to Recommender Tab
-      document.getElementById('tab-btn-recommender')?.click();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  // Load and Render Notifications
-  async function loadNotifications() {
-    const container = document.getElementById('notifications-list-container');
-    if (!container) return;
-
-    try {
-      const res = await fetch('/api/notifications');
-      allNotifications = await res.json();
-
-      if (allNotifications.length === 0) {
-        container.innerHTML = `
-          <div class="result-placeholder">
-            <div class="placeholder-icon">📭</div>
-            <h4>No Notifications Yet</h4>
-            <p>Run a live recommendation above or click <strong>"Run Batch for All 99 Candidates"</strong> to populate MongoDB notifications.</p>
-          </div>
-        `;
-        return;
-      }
-
-      container.innerHTML = allNotifications.map((notif, idx) => `
-        <div class="notification-item">
-          <div>
-            <div class="notif-user">${notif.user_name}</div>
-            <div class="notif-role">🎯 Recommended: <strong>${notif.job_title}</strong> at ${notif.company}</div>
-            <div class="notif-company">📍 Location: ${notif.location} • Status: <span class="badge badge-outline">${notif.status}</span></div>
-          </div>
-          <span class="code-pill">Notification #${allNotifications.length - idx}</span>
-        </div>
-      `).join('');
-    } catch (err) {
-      console.error('Error fetching notifications:', err);
-    }
-  }
-
-  // Clear Notifications
-  document.getElementById('btn-clear-notifications')?.addEventListener('click', async () => {
-    if (confirm('Are you sure you want to clear all MongoDB notifications?')) {
-      try {
-        await fetch('/api/notifications/clear', { method: 'POST' });
-        loadNotifications();
-        loadStats();
-      } catch (err) {
-        console.error('Error clearing notifications:', err);
-      }
-    }
-  });
-
-  // Batch Evaluation on all 99 Candidates
-  document.getElementById('btn-batch-eval')?.addEventListener('click', async () => {
-    const btn = document.getElementById('btn-batch-eval');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="status-dot"></span> <span>Running batch matching...</span>';
-
-    try {
-      const res = await fetch('/api/run-batch', { method: 'POST' });
-      const data = await res.json();
-      alert(`🎉 Batch complete! Successfully evaluated ${data.processed} candidates and saved matching notifications to MongoDB.`);
-      loadNotifications();
+      renderResult(res, payload);
       loadStats();
     } catch (err) {
-      console.error('Batch error:', err);
-      alert('Error running batch evaluation.');
+      $('result-tag').textContent = 'Error';
+      $('result-tag').className = 'result-tag';
+      $('result-placeholder').classList.remove('hidden');
+      $('result-placeholder').querySelector('p').textContent = 'Failed to connect to server. Is Flask running?';
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '<span>🚀 Run Batch for All 99 Candidates</span>';
+      btn.textContent = 'Run AI Recommendation';
     }
   });
+}
 
-  // Utility: Debounce function for smooth search
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
+function renderResult(res, payload) {
+  $('result-body').classList.remove('hidden');
+  $('result-placeholder').classList.add('hidden');
+  $('result-tag').textContent = 'Matched';
+  $('result-tag').className = 'result-tag matched';
+
+  // Role + Confidence
+  // Engine returns confidence as fraction 0.0–1.0, so multiply by 100 for display
+  const predicted = res.predicted_role || '—';
+  const confFrac  = typeof res.confidence === 'number' ? res.confidence : 0;
+  const confPct   = Math.min(100, Math.round(confFrac * 100));
+  $('predicted-role-title').textContent = predicted;
+  $('confidence-val').textContent = confPct + '%';
+
+  // Probability bars (top 5)
+  // probabilities dict: {role: fraction} — multiply by 100 for display
+  const probContainer = $('prob-bars-container');
+  probContainer.innerHTML = '';
+  const probs  = res.probabilities || {};
+  const sorted = Object.entries(probs).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (sorted.length === 0) {
+    probContainer.innerHTML = '<p style="color:var(--text-4);font-size:12px">No probability data returned.</p>';
   }
+  sorted.forEach(([label, prob]) => {
+    const pct = Math.min(100, Math.round(prob * 100));
+    const row = document.createElement('div');
+    row.className = 'prob-bar-row';
+    row.innerHTML = `
+      <div class="prob-bar-label" title="${label}">${label}</div>
+      <div class="prob-bar-track"><div class="prob-bar-fill" style="width:${pct}%"></div></div>
+      <div class="prob-bar-val">${pct}%</div>`;
+    probContainer.appendChild(row);
+  });
+
+  // Best matched job
+  const job = res.matched_job;
+  if (job && Object.keys(job).length > 0) {
+    $('jm-title').textContent     = job.title || '—';
+    $('jm-company').textContent   = job.company || '—';
+    $('jm-location').textContent  = job.location || '—';
+    $('jm-exp').textContent       = 'Min ' + (job.experience_required || 0) + ' yrs';
+    $('jm-desc').textContent      = job.description || '';
+
+    const reqSkills          = skillList(job.required_skills || '');
+    const candidateSkillsRaw = payload.skills || '';
+    const candidateSkillsLower = new Set(
+      candidateSkillsRaw.split(/[,;]+/).map(s => s.trim().toLowerCase()).filter(Boolean)
+    );
+
+    $('jm-req-skills').innerHTML     = tagsHtml(reqSkills, candidateSkillsLower);
+    const matchedSkills              = reqSkills.filter(s => candidateSkillsLower.has(s.toLowerCase()));
+    $('jm-matched-skills').innerHTML = matchedSkills.length
+      ? matchedSkills.map(s => `<span class="sk-tag match">${s}</span>`).join('')
+      : '<span style="color: var(--text-4); font-size:12px">No matching skills</span>';
+
+    const badge         = $('jm-badge');
+    badge.innerHTML     = `<span class="status-pill unread">${matchedSkills.length}/${reqSkills.length} skills</span>`;
+
+    // ── Inline Candidate Details (visible right on the result card) ──
+    const existingDetail = document.getElementById('inline-candidate-detail');
+    if (existingDetail) existingDetail.remove();
+
+    const candidateSkillsList = candidateSkillsRaw
+      .split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+
+    const inlineDetail = document.createElement('div');
+    inlineDetail.id    = 'inline-candidate-detail';
+    inlineDetail.className = 'inline-detail-card';
+    inlineDetail.innerHTML = `
+      <div class="inline-detail-grid">
+        <div class="inline-section">
+          <div class="section-label">Candidate Summary</div>
+          <div class="irow"><span class="ikey">Name</span><span class="ival">${payload.name || '—'}</span></div>
+          <div class="irow"><span class="ikey">Location</span><span class="ival">${payload.location || '—'}</span></div>
+          <div class="irow"><span class="ikey">Experience</span><span class="ival">${payload.experience || 0} years</span></div>
+          <div class="irow"><span class="ikey">Bio</span><span class="ival" style="font-style:italic">${(payload.bio || '—').slice(0, 100)}</span></div>
+          <div class="irow"><span class="ikey">Skills</span><div class="sk-tags" style="margin-top:2px">${tagsHtml(candidateSkillsList, new Set(reqSkills.map(s=>s.toLowerCase())))}</div></div>
+        </div>
+        <div class="inline-section">
+          <div class="section-label">Match Quality</div>
+          <div class="irow"><span class="ikey">Matched Role</span><span class="ival fw">${predicted}</span></div>
+          <div class="irow"><span class="ikey">AI Confidence</span><span class="ival fw" style="color:var(--blue)">${confPct}%</span></div>
+          <div class="irow"><span class="ikey">Company</span><span class="ival fw">${job.company || '—'}</span></div>
+          <div class="irow"><span class="ikey">Job Location</span><span class="ival">${job.location || '—'}</span></div>
+          <div class="irow"><span class="ikey">Skill Match</span><span class="ival fw" style="color:var(--green)">${matchedSkills.length} / ${reqSkills.length}</span></div>
+          <div class="irow"><span class="ikey">Exp. Eligible</span><span class="ival">${(payload.experience || 0) >= (job.experience_required || 0)
+            ? '✓ Yes (' + (payload.experience||0) + ' ≥ ' + (job.experience_required||0) + ' yrs)'
+            : '✗ No (' + (payload.experience||0) + ' < ' + (job.experience_required||0) + ' yrs)'}</span></div>
+        </div>
+      </div>`;
+
+    // Insert before the matched job section
+    const matchSection = $('matched-job-section');
+    matchSection.parentNode.insertBefore(inlineDetail, matchSection);
+
+    $('matched-job-section').classList.remove('hidden');
+  } else {
+    $('matched-job-section').classList.add('hidden');
+  }
+
+  // Constraint message
+  const msg = $('constraint-msg');
+  msg.textContent = res.constraint_message || '';
+
+  // DB saved notice
+  const notice = $('db-saved-notice');
+  if (res.notification_saved) {
+    notice.classList.remove('hidden');
+  } else {
+    notice.classList.add('hidden');
+  }
+}
+
+// ============ Jobs tab ============
+
+let allJobs = [];
+
+async function loadJobs() {
+  if (allJobs.length === 0) {
+    try { allJobs = await req('/api/jobs'); } catch { return; }
+  }
+  renderJobs(allJobs);
+}
+
+function renderJobs(jobs) {
+  const grid = $('jobs-grid');
+  if (!grid) return;
+  if (!jobs.length) { grid.innerHTML = '<p style="color:var(--text-3)">No jobs found.</p>'; return; }
+  grid.innerHTML = jobs.map(j => {
+    const skills = skillList(j.required_skills || '').slice(0, 6);
+    return `<div class="card">
+      <div class="card-title">${j.title || '—'}</div>
+      <div class="card-sub">${j.company || '—'} · ${j.location || '—'} · Min ${j.experience_required || 0} yrs</div>
+      <p style="font-size:12px;color:var(--text-3);line-height:1.5;margin-bottom:6px">${(j.description || '').slice(0, 90)}…</p>
+      <div class="card-tags">${cardTagsHtml(skills)}</div>
+    </div>`;
+  }).join('');
+}
+
+function initJobSearch() {
+  let debounce;
+  const s = $('job-search');
+  if (s) {
+    s.addEventListener('input', function() {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => filterJobs(), 200);
+    });
+  }
+  const rf = $('job-role-filter');
+  if (rf) rf.addEventListener('change', filterJobs);
+}
+
+function filterJobs() {
+  const q = ($('job-search') ? $('job-search').value : '').toLowerCase();
+  const role = $('job-role-filter') ? $('job-role-filter').value : '';
+  const filtered = allJobs.filter(j => {
+    const matchQ = !q || [j.title, j.company, j.required_skills, j.location].some(f => (f || '').toLowerCase().includes(q));
+    const matchRole = !role || j.title === role;
+    return matchQ && matchRole;
+  });
+  renderJobs(filtered);
+}
+
+// ============ Profiles tab ============
+
+let allProfiles = [];
+
+async function loadProfiles() {
+  if (allProfiles.length === 0) {
+    try { allProfiles = await req('/api/profiles'); } catch { return; }
+  }
+  renderProfiles(allProfiles);
+}
+
+function renderProfiles(profiles) {
+  const grid = $('profiles-grid');
+  if (!grid) return;
+  if (!profiles.length) { grid.innerHTML = '<p style="color:var(--text-3)">No profiles found.</p>'; return; }
+  grid.innerHTML = profiles.map(p => {
+    const skills = skillList(p.skills || '').slice(0, 6);
+    return `<div class="card">
+      <div class="card-title">${p.name || '—'}</div>
+      <div class="card-sub">${p.location || '—'} · ${p.experience || 0} yr${p.experience !== 1 ? 's' : ''} exp · ${p.email || ''}</div>
+      <p style="font-size:12px;color:var(--text-3);line-height:1.5;margin-bottom:6px">${(p.bio || '').slice(0, 90)}…</p>
+      <div class="card-tags">${cardTagsHtml(skills)}</div>
+    </div>`;
+  }).join('');
+}
+
+function initProfileSearch() {
+  let debounce;
+  const s = $('profile-search');
+  if (!s) return;
+  s.addEventListener('input', function() {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      const q = this.value.toLowerCase();
+      renderProfiles(allProfiles.filter(p =>
+        [p.name, p.skills, p.location].some(f => (f || '').toLowerCase().includes(q))
+      ));
+    }, 200);
+  });
+}
+
+// ============ Alerts (Notifications) tab ============
+
+async function loadAlerts() {
+  try {
+    const notifs = await req('/api/notifications');
+    const tbody = $('alerts-tbody');
+    const empty = $('alerts-empty');
+    if (!tbody) return;
+    if (!notifs.length) {
+      tbody.innerHTML = '';
+      if (empty) empty.classList.remove('hidden');
+      return;
+    }
+    if (empty) empty.classList.add('hidden');
+    tbody.innerHTML = notifs.map((n, i) => `
+      <tr data-id="${n._id || ''}"
+          data-user="${encodeURIComponent(n.user_name || '')}"
+          data-job="${encodeURIComponent(n.job_title || '')}"
+          data-company="${encodeURIComponent(n.company || '')}"
+          data-job-loc="${encodeURIComponent(n.location || '')}">
+        <td>${i + 1}</td>
+        <td><strong>${n.user_name || '—'}</strong></td>
+        <td><span class="city-pill">${n.candidate_location || '—'}</span></td>
+        <td>${n.job_title || '—'}</td>
+        <td>${n.company || '—'}</td>
+        <td>${n.location || '—'}</td>
+        <td><span class="status-pill ${n.status || 'unread'}">${n.status || 'unread'}</span></td>
+      </tr>`).join('');
+
+    // Make rows clickable
+    tbody.querySelectorAll('tr').forEach(row => {
+      row.addEventListener('click', () => openModal(
+        decodeURIComponent(row.dataset.user),
+        decodeURIComponent(row.dataset.job),
+        decodeURIComponent(row.dataset.company),
+        decodeURIComponent(row.dataset.jobLoc),
+        row.dataset.id
+      ));
+    });
+  } catch (e) {
+    console.error('Alerts error', e);
+  }
+}
+
+function initAlertActions() {
+  const batchBtn = $('btn-batch');
+  if (batchBtn) {
+    batchBtn.addEventListener('click', async () => {
+      batchBtn.disabled = true; batchBtn.textContent = 'Running batch…';
+      try {
+        const res = await req('/api/run-batch', { method: 'POST' });
+        batchBtn.textContent = `Done — ${res.processed} processed`;
+        await loadAlerts();
+      } catch {
+        batchBtn.textContent = 'Batch failed';
+      } finally {
+        setTimeout(() => { batchBtn.disabled = false; batchBtn.textContent = 'Run Batch (All 99 Candidates)'; }, 3000);
+      }
+    });
+  }
+
+  const clearBtn = $('btn-clear');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', async () => {
+      if (!confirm('Clear all recommendation alerts from the database?')) return;
+      await req('/api/notifications/clear', { method: 'POST' });
+      await loadAlerts();
+    });
+  }
+}
+
+// ============ Detail Modal ============
+
+async function openModal(userName, jobTitle, company, jobLocation, notifId) {
+  const overlay = $('modal-overlay');
+  const body = $('modal-body');
+  $('modal-title').textContent = `${userName} → ${jobTitle}`;
+  body.innerHTML = '<div class="modal-loading">Loading details…</div>';
+  overlay.classList.remove('hidden');
+
+  try {
+    const params = new URLSearchParams({
+      user_name: userName,
+      job_title: jobTitle,
+      company: company || '',
+      job_location: jobLocation || '',
+      notif_id: notifId || ''
+    });
+    const d = await req(`/api/notification-detail?${params}`);
+    body.innerHTML = buildModalHtml(d.profile || {}, d.job || {});
+  } catch {
+    body.innerHTML = '<div class="modal-loading">Failed to load details.</div>';
+  }
+}
+
+function buildModalHtml(profile, job) {
+  const pSkills = skillList(profile.skills || '');
+  const jSkills = skillList(job.required_skills || '');
+  const pSkillSet = new Set(pSkills.map(s => s.toLowerCase()));
+  const matchedCount = jSkills.filter(s => pSkillSet.has(s.toLowerCase())).length;
+
+  function row(label, val) {
+    if (!val && val !== 0) return '';
+    return `<div class="modal-row">
+      <div class="modal-row-label">${label}</div>
+      <div class="modal-row-value">${val}</div>
+    </div>`;
+  }
+
+  return `
+    <div class="modal-grid">
+      <div class="modal-section">
+        <div class="modal-section-title">Candidate Profile</div>
+        ${row('Name', profile.name)}
+        ${row('Email', profile.email)}
+        ${row('Candidate Location', profile.location)}
+        ${row('Experience', profile.experience !== undefined ? profile.experience + ' years' : '')}
+        ${row('Bio', profile.bio)}
+        <div class="modal-row">
+          <div class="modal-row-label">Skills</div>
+          <div class="sk-tags" style="margin-top:4px">${tagsHtml(pSkills, new Set(jSkills.map(s => s.toLowerCase())))}</div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Matched Job</div>
+        ${row('Job Title', job.title)}
+        ${row('Company', job.company)}
+        ${row('Job Location', job.location)}
+        ${row('Min Experience', job.experience_required !== undefined ? job.experience_required + ' years' : '')}
+        ${row('Description', job.description)}
+        <div class="modal-row">
+          <div class="modal-row-label">Required Skills</div>
+          <div class="sk-tags" style="margin-top:4px">${tagsHtml(jSkills, pSkillSet)}</div>
+        </div>
+      </div>
+    </div>
+    <hr class="modal-divider">
+    <div style="font-size:13px;color:var(--text-3)">
+      <strong style="color:var(--text-1)">${matchedCount} of ${jSkills.length}</strong> required skills matched
+      &nbsp;·&nbsp; Candidate has <strong style="color:var(--text-1)">${profile.experience || 0} yr</strong> experience
+      &nbsp;·&nbsp; Job requires <strong style="color:var(--text-1)">${job.experience_required || 0} yr</strong>
+    </div>`;
+}
+
+function initModal() {
+  const closeBtn = $('modal-close');
+  const overlay = $('modal-overlay');
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+  });
+}
+
+function closeModal() {
+  const overlay = $('modal-overlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+// ============ Boot ============
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  initTabs();
+  initSlider();
+  initPresets();
+  initSkillChips();
+  initCandidateDropdown();
+  initRecommendForm();
+  initJobSearch();
+  initProfileSearch();
+  initAlertActions();
+  initModal();
+  loadStats();
 });
