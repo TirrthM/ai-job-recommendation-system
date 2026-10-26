@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JobMatch AI • Intelligent Job Recommender System</title>
+  <meta name="description" content="AI-powered Job Recommendation System using TF-IDF, Naive Bayes Classification, and MongoDB.">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+  <div class="glow-orb orb-3"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">JobMatch <span class="gradient-text">AI</span></h1>
+          <p class="brand-subtitle">Recommender Systems • Mini Project</p>
+        </div>
+      </div>
+
+      <div class="system-status-pills">
+        <div class="status-pill active" id="db-status-pill">
+          <span class="status-dot"></span>
+          <span>MongoDB: <strong id="header-db-status">Connected (27017)</strong></span>
+        </div>
+        <div class="status-pill">
+          <span class="status-icon">⚡</span>
+          <span>Model: <strong>TF-IDF + Naive Bayes</strong></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="nav-bar">
+    <div class="nav-container">
+      <button class="nav-tab active" data-tab="tab-recommender" id="tab-btn-recommender">
+        <span class="tab-icon">🎯</span> Live Recommender
+      </button>
+      <button class="nav-tab" data-tab="tab-jobs" id="tab-btn-jobs">
+        <span class="tab-icon">💼</span> Job Catalog (<span id="count-jobs-badge">99</span>)
+      </button>
+      <button class="nav-tab" data-tab="tab-profiles" id="tab-btn-profiles">
+        <span class="tab-icon">👥</span> Profiles (<span id="count-profiles-badge">99</span>)
+      </button>
+      <button class="nav-tab" data-tab="tab-notifications" id="tab-btn-notifications">
+        <span class="tab-icon">🔔</span> Live Notifications (<span id="count-notifications-badge">0</span>)
+      </button>
+      <button class="nav-tab" data-tab="tab-analytics" id="tab-btn-analytics">
+        <span class="tab-icon">🧠</span> RS Architecture & Theory
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Content Container -->
+  <main class="main-container">
+
+    <!-- ==================== TAB 1: LIVE RECOMMENDER ==================== -->
+    <section class="tab-content active" id="tab-recommender">
+      <div class="hero-banner">
+        <div>
+          <h2 class="hero-title">Intelligent Candidate Job Matching</h2>
+          <p class="hero-desc">
+            Test the Content-Based Filtering engine with existing MongoDB alumni profiles or simulate a custom candidate in real-time.
+          </p>
+        </div>
+        <div class="quick-preset-container">
+          <span class="preset-label">Quick Presets:</span>
+          <button class="preset-chip" id="preset-ml">🤖 Machine Learning</button>
+          <button class="preset-chip" id="preset-devops">⚙️ DevOps / Cloud</button>
+          <button class="preset-chip" id="preset-fullstack">💻 Full Stack Dev</button>
+        </div>
+      </div>
+
+      <div class="recommender-grid">
+        <!-- Input Form Card -->
+        <div class="card glass-card form-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge">Candidate Input</span>
+              <h3 class="card-title">Candidate Profile Attributes</h3>
+            </div>
+            <div class="select-candidate-wrapper">
+              <label for="candidate-select" class="sr-only">Or pick an alumni profile</label>
+              <select id="candidate-select" class="form-select-sm">
+                <option value="">-- Load from MongoDB Profiles --</option>
+              </select>
+            </div>
+          </div>
+
+          <form id="recommendation-form">
+            <div class="form-group">
+              <label for="candidate-name" class="form-label">Candidate Name</label>
+              <input type="text" id="candidate-name" class="form-input" placeholder="e.g. Alex Johnson" value="Alex Johnson" required>
+            </div>
+
+            <div class="form-group">
+              <label for="candidate-skills" class="form-label">
+                Technical Skills <span class="text-muted">(comma-separated)</span>
+              </label>
+              <input type="text" id="candidate-skills" class="form-input" placeholder="e.g. Python, TensorFlow, Azure, Docker" value="Python, TensorFlow, Azure, Keras" required>
+              
+              <!-- Quick Skill Tags to Click -->
+              <div class="skill-tag-suggestions">
+                <span class="suggest-label">Add:</span>
+                <button type="button" class="add-skill-tag" data-skill="Python">+ Python</button>
+                <button type="button" class="add-skill-tag" data-skill="TensorFlow">+ TensorFlow</button>
+                <button type="button" class="add-skill-tag" data-skill="React">+ React</button>
+                <button type="button" class="add-skill-tag" data-skill="Node.js">+ Node.js</button>
+                <button type="button" class="add-skill-tag" data-skill="AWS">+ AWS</button>
+                <button type="button" class="add-skill-tag" data-skill="Azure">+ Azure</button>
+                <button type="button" class="add-skill-tag" data-skill="ML">+ ML</button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group half-width">
+                <label for="candidate-experience" class="form-label">
+                  Experience: <strong id="exp-val-display" class="gradient-text">3 Years</strong>
+                </label>
+                <input type="range" id="candidate-experience" min="0" max="12" value="3" class="form-range">
+                <div class="range-marks">
+                  <span>0 yr (Fresher)</span>
+                  <span>5 yrs</span>
+                  <span>12+ yrs</span>
+                </div>
+              </div>
+
+              <div class="form-group half-width">
+                <label for="candidate-location" class="form-label">Preferred Location</label>
+                <input type="text" id="candidate-location" class="form-input" placeholder="e.g. Pune, Bangalore, Remote" value="Bangalore">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="candidate-bio" class="form-label">Professional Bio / Background</label>
+              <textarea id="candidate-bio" class="form-textarea" rows="3" placeholder="Describe career aspirations, projects or expertise...">Passionate AI developer with background in training deep learning models and cloud deployment pipelines.</textarea>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="btn-predict">
+                <span class="btn-icon">⚡</span>
+                <span>Run AI Recommendation</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Output Result Card -->
+        <div class="card glass-card result-card" id="result-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-badge pulse-badge" id="result-status-badge">Awaiting Input</span>
+              <h3 class="card-title">Recommendation Results</h3>
+            </div>
+            <span class="badge badge-outline" id="result-exec-time">Real-time</span>
+          </div>
+
+          <!-- Empty placeholder before recommendation -->
+          <div class="result-placeholder" id="result-placeholder">
+            <div class="placeholder-icon">🔮</div>
+            <h4>Ready to Predict</h4>
+            <p>Click <strong>"Run AI Recommendation"</strong> or pick an existing profile above to evaluate matching jobs.</p>
+          </div>
+
+          <!-- Actual Result Container (Hidden until prediction) -->
+          <div class="result-body hidden" id="result-body">
+            <!-- Predicted Role Banner -->
+            <div class="prediction-banner">
+              <div class="pred-label-text">
+                <span class="banner-sub">ML Classification Result:</span>
+                <h2 class="predicted-role-title" id="predicted-role-title">DevOps Engineer</h2>
+              </div>
+              <div class="confidence-box">
+                <div class="confidence-circle" id="confidence-circle">
+                  <span id="confidence-val">87%</span>
+                </div>
+                <span class="confidence-label">Model Confidence</span>
+              </div>
+            </div>
+
+            <!-- Probability Distribution Breakdown -->
+            <div class="prob-section">
+              <h4 class="section-micro-heading">Top Category Probabilities (Multinomial Naive Bayes)</h4>
+              <div class="prob-bars-container" id="prob-bars-container">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <!-- Best Matched Job Card -->
+            <div class="matched-job-spotlight" id="matched-job-spotlight">
+              <div class="spotlight-header">
+                <div>
+                  <span class="spotlight-tag">⭐ Best Matched Job Posting</span>
+                  <h3 class="spotlight-title" id="spotlight-title">Role Name</h3>
+                  <div class="spotlight-meta">
+                    <span class="meta-item" id="spotlight-company">🏢 Company</span>
+                    <span class="meta-item" id="spotlight-location">📍 Location</span>
+                    <span class="meta-item" id="spotlight-exp">⏳ Min Experience: 0 yrs</span>
+                  </div>
+                </div>
+                <div id="qualification-badge-container">
+                  <!-- Qualified or Unqualified badge -->
+                </div>
+              </div>
+
+              <p class="spotlight-desc" id="spotlight-desc">Job description details will be displayed here...</p>
+
+              <div class="skills-matched-box">
+                <div class="skills-row">
+                  <span class="skill-label">Required Skills:</span>
+                  <div class="skill-tags-group" id="spotlight-req-skills"></div>
+                </div>
+                <div class="skills-row highlight-row">
+                  <span class="skill-label">Skills You Match:</span>
+                  <div class="skill-tags-group" id="spotlight-matched-skills"></div>
+                </div>
+              </div>
+
+              <!-- Constraint Verification Alert -->
+              <div class="constraint-alert" id="constraint-alert">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <!-- MongoDB Notification Status Toast -->
+            <div class="db-notification-alert" id="db-notification-alert">
+              <span class="notif-check">✅</span>
+              <div>
+                <strong>Persisted to MongoDB:</strong>
+                <p>Saved notification record into <code>alumni_database.notifications</code></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: JOB CATALOG ==================== -->
+    <section class="tab-content" id="tab-jobs">
+      <div class="catalog-header-bar">
+        <div>
+          <h2 class="hero-title">Job Catalog in MongoDB</h2>
+          <p class="hero-desc">Explore the 99 active listings in <code>alumni_database.jobs</code>.</p>
+        </div>
+        <div class="catalog-filters">
+          <input type="text" id="job-search-input" class="search-input" placeholder="🔍 Search by skill, title, company...">
+          <select id="job-role-filter" class="form-select-sm">
+            <option value="">All Job Roles</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="jobs-grid" id="jobs-cards-container">
+        <!-- Dynamically rendered -->
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: CANDIDATE PROFILES ==================== -->
+    <section class="tab-content" id="tab-profiles">
+      <div class="catalog-header-bar">
+        <div>
+          <h2 class="hero-title">Candidate Directory</h2>
+          <p class="hero-desc">Browse candidate profiles in <code>alumni_database.profiles</code> and trigger instant AI evaluation.</p>
+        </div>
+        <div class="catalog-filters">
+          <input type="text" id="profile-search-input" class="search-input" placeholder="🔍 Search candidate by name or skill...">
+        </div>
+      </div>
+
+      <div class="profiles-grid" id="profiles-cards-container">
+        <!-- Dynamically rendered -->
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: MONGODB NOTIFICATIONS ==================== -->
+    <section class="tab-content" id="tab-notifications">
+      <div class="catalog-header-bar">
+        <div>
+          <h2 class="hero-title">MongoDB Notifications Dispatch</h2>
+          <p class="hero-desc">Live records stored in <code>alumni_database.notifications</code> for matched candidates.</p>
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="btn-batch-eval">
+            <span>🚀 Run Batch for All 99 Candidates</span>
+          </button>
+          <button class="btn btn-danger" id="btn-clear-notifications">
+            <span>🗑️ Clear Notifications</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="notifications-list" id="notifications-list-container">
+        <!-- Dynamically rendered -->
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: RS ARCHITECTURE & THEORY ==================== -->
+    <section class="tab-content" id="tab-analytics">
+      <div class="theory-hero">
+        <h2 class="hero-title">Recommender System Architecture & Theory</h2>
+        <p class="hero-desc">Comprehensive theoretical foundation for Academic viva, project report, and demonstration.</p>
+      </div>
+
+      <!-- 4-Stage Pipeline Diagram -->
+      <div class="pipeline-section">
+        <h3 class="pipeline-title">Recommender System Processing Pipeline</h3>
+        <div class="pipeline-grid">
+          <div class="pipeline-step-card">
+            <div class="step-num">01</div>
+            <h4>Feature Vectorization</h4>
+            <p class="step-tech">TF-IDF Vector Space</p>
+            <p class="step-desc">Transforms unstructured text (skills & bios) into statistical term-frequency and inverse-document-frequency vectors.</p>
+            <span class="code-pill">TfidfVectorizer(stop_words='english')</span>
+          </div>
+
+          <div class="pipeline-arrow">➔</div>
+
+          <div class="pipeline-step-card">
+            <div class="step-num">02</div>
+            <h4>Supervised Matching</h4>
+            <p class="step-tech">Multinomial Naive Bayes</p>
+            <p class="step-desc">Calculates posterior probabilities $P(\text{Role} \mid \text{Skills})$ to classify candidates into the most suitable target job role.</p>
+            <span class="code-pill">MultinomialNB()</span>
+          </div>
+
+          <div class="pipeline-arrow">➔</div>
+
+          <div class="pipeline-step-card">
+            <div class="step-num">03</div>
+            <h4>Constraint Filtering</h4>
+            <p class="step-tech">Rule-Based Post-Filter</p>
+            <p class="step-desc">Enforces hard business rules: checks if candidate experience meets or exceeds minimum job requirement.</p>
+            <span class="code-pill">exp_candidate >= exp_required</span>
+          </div>
+
+          <div class="pipeline-arrow">➔</div>
+
+          <div class="pipeline-step-card">
+            <div class="step-num">04</div>
+            <h4>Push Delivery</h4>
+            <p class="step-tech">MongoDB Persistence</p>
+            <p class="step-desc">Stores matching alerts as structured JSON documents into the <code>notifications</code> collection for asynchronous user retrieval.</p>
+            <span class="code-pill">db.notifications.insert_one()</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Theory comparison cards -->
+      <div class="theory-grid">
+        <div class="card glass-card">
+          <h4 class="theory-card-title">Why Content-Based vs. Collaborative Filtering?</h4>
+          <p class="theory-text">
+            <strong>Collaborative Filtering (CF)</strong> relies on user interaction matrices (e.g., job application histories, clicks, ratings). In student or job boards, new jobs and fresh alumni experience the <em>Cold Start Problem</em>.
+          </p>
+          <p class="theory-text">
+            <strong>Content-Based Filtering (CBF)</strong> circumvents this by analyzing intrinsic item attributes (skills, experience, job descriptions). Every candidate receives recommendations immediately upon profile creation.
+          </p>
+        </div>
+
+        <div class="card glass-card">
+          <h4 class="theory-card-title">Mathematical Formulation of Naive Bayes</h4>
+          <p class="theory-text">
+            The classifier uses Bayes' Theorem with conditional feature independence:
+          </p>
+          <div class="math-box">
+            $$P(C_k \mid x) = \frac{P(C_k) \prod_{i=1}^{n} P(x_i \mid C_k)}{P(x)}$$
+          </div>
+          <p class="theory-text">
+            Where $C_k$ is the Job Title category and $x_i$ represents the TF-IDF feature weight of a specific tech skill.
+          </p>
+        </div>
+
+        <div class="card glass-card">
+          <h4 class="theory-card-title">Dataset Metrics & Distribution</h4>
+          <div class="stats-mini-list" id="stats-skills-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>AI Job Recommendation System • Recommender Systems Project • Connected to MongoDB (<code>localhost:27017</code>)</p>
+      <div class="footer-badge">Python 3.11 • scikit-learn • Flask • PyMongo</div>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
