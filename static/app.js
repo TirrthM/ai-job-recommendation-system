@@ -452,14 +452,17 @@ function initProfileSearch() {
 async function loadAlerts() {
   try {
     const notifs = await req('/api/notifications');
+    const table = $('alerts-table');
     const tbody = $('alerts-tbody');
     const empty = $('alerts-empty');
     if (!tbody) return;
     if (!notifs.length) {
       tbody.innerHTML = '';
+      if (table) table.classList.add('hidden');
       if (empty) empty.classList.remove('hidden');
       return;
     }
+    if (table) table.classList.remove('hidden');
     if (empty) empty.classList.add('hidden');
     tbody.innerHTML = notifs.map((n, i) => `
       <tr data-id="${n._id || ''}"
@@ -495,25 +498,53 @@ function initAlertActions() {
   const batchBtn = $('btn-batch');
   if (batchBtn) {
     batchBtn.addEventListener('click', async () => {
-      batchBtn.disabled = true; batchBtn.textContent = 'Running batch…';
+      batchBtn.disabled = true;
+      batchBtn.textContent = 'Running batch…';
       try {
-        const res = await req('/api/run-batch', { method: 'POST' });
+        const res = await req('/api/run-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
         batchBtn.textContent = `Done — ${res.processed} processed`;
         await loadAlerts();
-      } catch {
+        await loadStats();
+      } catch (e) {
+        console.error(e);
         batchBtn.textContent = 'Batch failed';
       } finally {
-        setTimeout(() => { batchBtn.disabled = false; batchBtn.textContent = 'Run Batch (All 99 Candidates)'; }, 3000);
+        setTimeout(() => {
+          batchBtn.disabled = false;
+          batchBtn.textContent = 'Run Batch (All 99 Candidates)';
+        }, 3000);
       }
     });
   }
 
   const clearBtn = $('btn-clear');
   if (clearBtn) {
-    clearBtn.addEventListener('click', async () => {
-      if (!confirm('Clear all recommendation alerts from the database?')) return;
-      await req('/api/notifications/clear', { method: 'POST' });
-      await loadAlerts();
+    clearBtn.addEventListener('click', async (e) => {
+      if (e) e.preventDefault();
+      clearBtn.disabled = true;
+      clearBtn.textContent = 'Clearing…';
+      try {
+        await req('/api/notifications/clear', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        clearBtn.textContent = 'Cleared ✓';
+        await loadAlerts();
+        await loadStats();
+      } catch (err) {
+        console.error('Clear failed', err);
+        clearBtn.textContent = 'Failed to clear';
+      } finally {
+        setTimeout(() => {
+          clearBtn.disabled = false;
+          clearBtn.textContent = 'Clear All Alerts';
+        }, 1500);
+      }
     });
   }
 }

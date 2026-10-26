@@ -110,7 +110,7 @@ def get_notifications():
     finally:
         client.close()
 
-@app.route('/api/notifications/clear', methods=['POST'])
+@app.route('/api/notifications/clear', methods=['POST', 'GET'])
 def clear_notifications():
     client, db = get_db()
     try:
